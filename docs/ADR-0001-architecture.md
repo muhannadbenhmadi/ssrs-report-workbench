@@ -19,3 +19,7 @@ No access to production databases; no automatic deployment; no secret logging; n
 ## Consequences
 
 Foundation tests can run without SSRS or Dynamics installed, but success cannot be interpreted as report correctness. Future adapters are optional and isolated by design.
+
+## PR-03 amendment
+
+The PostToolUse hook is advisory only: it adds validation context after an RDL write or edit, never blocks a tool call and never edits files. The static validator cannot replace the RDL runtime; a PASS means no static rule fired, not that a report deploys or renders on SSRS or Power BI Report Server.

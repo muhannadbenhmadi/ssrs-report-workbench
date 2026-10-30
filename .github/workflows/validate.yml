@@ -36,3 +36,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Run foundation diagnostic
         run: python scripts/diagnose.py --root . --json
+      - name: Run RDL validator on fixtures (expects exit 1, broken fixture included)
+        run: python -c "import subprocess,sys; r=subprocess.run([sys.executable,'scripts/rdl_validate.py','--root','tests/fixtures/rdl','--json'],capture_output=True,text=True); print(r.stdout[-1500:]); sys.exit(0 if r.returncode==1 else 1)"

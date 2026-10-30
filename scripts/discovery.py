@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 EXTENSIONS = {
-    ".rdl": "rdl", ".rds": "rdl", ".rsd": "rdl", ".rptproj": "rdl",
+    ".rdl": "rdl", ".rds": "rdl", ".rsds": "rdl", ".rsd": "rdl", ".rptproj": "rdl",
     ".xpp": "rdp", ".xml": "candidate", ".axreport": "rdp",
 }
 SKIP_DIRS = {".git", ".vs", ".venv", "node_modules", "bin", "obj",

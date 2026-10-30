@@ -11,11 +11,14 @@ from typing import Any
 
 MANIFEST = Path(".claude-plugin/plugin.json")
 SKILL = Path("skills/diagnose/SKILL.md")
+HOOKS = Path("hooks/hooks.json")
+MARKETPLACE = Path(".claude-plugin/marketplace.json")
 NAME = "ssrs-report-workbench"
 MAX_BYTES = 1024 * 1024
 
 
 def read_local_file(root: Path, relative: Path) -> str:
+    root = root.resolve()
     path = root / relative
     if path.is_symlink():
         raise ValueError("Refusing a symlink")
@@ -68,16 +71,92 @@ def check_diagnostic_skill(root: Path) -> dict[str, Any]:
         return {"id": "diagnostic-skill", "status": "FAIL", "path": str(SKILL), "detail": str(exc)}
 
 
+def check_skills(root: Path) -> dict[str, Any]:
+    names: list[str] = []
+    bad: list[str] = []
+    skills_dir = root / "skills"
+    files = sorted(skills_dir.glob("*/SKILL.md")) if skills_dir.is_dir() else []
+    for path in files:
+        rel = path.relative_to(root)
+        try:
+            content = read_local_file(root, rel)
+            parts = content.split("---\n", 2)
+            if not content.startswith("---\n") or len(parts) != 3:
+                raise ValueError("bad frontmatter")
+            if not re.search(r"^name:\s*\S", parts[1], flags=re.MULTILINE):
+                raise ValueError("missing name")
+            if not re.search(r"^description:\s*\S", parts[1], flags=re.MULTILINE):
+                raise ValueError("missing description")
+            names.append(path.parent.name)
+        except (OSError, UnicodeError, ValueError):
+            bad.append(rel.as_posix())
+    if not files:
+        return {"id": "skills", "status": "FAIL", "path": "skills", "detail": "No skills/*/SKILL.md found"}
+    if bad:
+        return {"id": "skills", "status": "FAIL", "path": "skills", "detail": "Invalid skills: " + ", ".join(bad)}
+    return {"id": "skills", "status": "PASS", "path": "skills", "detail": "Skills: " + ", ".join(names)}
+
+
+def check_hooks(root: Path) -> dict[str, Any]:
+    path = str(HOOKS)
+    try:
+        try:
+            data = json.loads(read_local_file(root, HOOKS))
+        except FileNotFoundError:
+            raise ValueError("hooks/hooks.json missing")
+        if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
+            raise ValueError("Expected top-level 'hooks' object")
+        for event, groups in data["hooks"].items():
+            for group in groups if isinstance(groups, list) else []:
+                for handler in group.get("hooks", []) if isinstance(group, dict) else []:
+                    if not isinstance(handler, dict) or handler.get("type") != "command" or "args" in handler:
+                        continue
+                    command = handler.get("command", "")
+                    if not isinstance(command, str):
+                        raise ValueError(f"{event}: command must be a string")
+                    for match in re.finditer(r"\$\{CLAUDE_PLUGIN_ROOT\}", command):
+                        if match.start() == 0 or command[match.start() - 1] != '"':
+                            raise ValueError(f"{event}: ${{CLAUDE_PLUGIN_ROOT}} must be wrapped in double quotes")
+        return {"id": "hooks", "status": "PASS", "path": path}
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        return {"id": "hooks", "status": "FAIL", "path": path, "detail": str(exc)}
+
+
+def check_marketplace(root: Path) -> dict[str, Any]:
+    path = str(MARKETPLACE)
+    try:
+        data = json.loads(read_local_file(root, MARKETPLACE))
+        if not isinstance(data, dict):
+            raise ValueError("Marketplace must be a JSON object")
+        if not isinstance(data.get("name"), str) or not data["name"].strip():
+            raise ValueError("Missing name")
+        owner = data.get("owner")
+        if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"].strip():
+            raise ValueError("Missing owner.name")
+        plugins = data.get("plugins")
+        if not isinstance(plugins, list) or not plugins or not isinstance(plugins[0], dict):
+            raise ValueError("Missing plugins[0]")
+        manifest = json.loads(read_local_file(root, MANIFEST))
+        if plugins[0].get("name") != manifest.get("name"):
+            raise ValueError("plugins[0].name does not match plugin manifest name")
+        if plugins[0].get("source") != "./":
+            raise ValueError("plugins[0].source must be './'")
+        return {"id": "marketplace", "status": "PASS", "path": path}
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        return {"id": "marketplace", "status": "FAIL", "path": path, "detail": str(exc)}
+
+
 def diagnose(root: Path) -> dict[str, Any]:
     root = root.resolve(strict=True)
     if not root.is_dir():
         raise NotADirectoryError(str(root))
-    checks = [check_manifest(root), check_diagnostic_skill(root)]
+    checks = [check_manifest(root), check_diagnostic_skill(root), check_skills(root),
+              check_hooks(root), check_marketplace(root)]
     return {
         "tool": "ssrs-report-workbench-foundation-diagnostic",
         "root": str(root),
         "status": "PASS" if all(c["status"] == "PASS" for c in checks) else "FAIL",
-        "scope": "PR-01 foundation only; not RDL/X++/Claude runtime validation",
+        "scope": "Foundation and PR-03 packaging checks only; not RDL/X++/Claude runtime validation",
         "checks": checks,
     }
 
@@ -96,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"{result['status']}: {result['tool']}")
         for item in result["checks"]:
-            print(f"  {item['status']} {item['id']}: {item['path']}")
+            print(f"  {item['status']} {item['id']}: {item['path']}" + (f" ({item['detail']})" if "detail" in item else ""))
         if "error" in result:
             print(result["error"])
     return 0 if result["status"] == "PASS" else 1

@@ -1,8 +1,8 @@
 {
   "name": "ssrs-report-workbench",
   "displayName": "SSRS Report Workbench",
-  "version": "0.1.0",
-  "description": "Read-only diagnostics and future engineering workflows for SSRS RDL and Dynamics 365 RDP.",
+  "version": "0.2.0",
+  "description": "Offline, read-only SSRS RDL validation, discovery and diagnostics, with future Dynamics 365 RDP workflows.",
   "author": {
     "name": "SSRS Report Workbench Contributors"
   },
