@@ -20,10 +20,30 @@ KNOWN_REASONS = {"oversize", "symlink", "unreadable", "no-candidates"}
 # Only fixed vocabulary reaches the model: rule ids, severities, counts, catalog titles and
 # structural locations with every Name value removed. No text from the edited file is echoed.
 _NAME_SEG = re.compile(r"\[@Name='[^']*'\]")
-_LOCATION_OK = re.compile(r"^[A-Za-z0-9_/]{1,200}$")
-_FILENAME_OK = re.compile(r"^[A-Za-z0-9._ -]{1,80}$")
+_SEGMENT_OK = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,40}$")
 _RULE_OK = re.compile(r"^RDL\d{3}$")
-NOTE = "(Names and messages are omitted here on purpose. Run the validate-rdl skill for details.)"
+MAX_SEGMENTS = 14
+# Closed vocabulary of element names that may appear in a reported location. Any other segment,
+# including ones forged through quote or bracket tricks in a Name attribute, is replaced by "?".
+KNOWN_ELEMENTS = frozenset("""
+Report ReportSections ReportSection Body ReportItems Textbox Tablix Rectangle Image Line Subreport
+Chart GaugePanel Map CustomReportItem Paragraphs Paragraph TextRuns TextRun Value Style Direction
+NumeralVariant NumeralLanguage LayoutDirection DataSources DataSource ConnectionProperties
+ConnectString DataSets DataSet Query DataSourceName CommandText Fields Field ReportParameters
+ReportParameter DataType DefaultValue Values QueryParameters QueryParameter Width Height Top Left
+Page PageWidth PageHeight LeftMargin RightMargin TopMargin BottomMargin InteractiveWidth
+InteractiveHeight Language Filters Filter FilterExpression FilterValues FilterValue Visibility
+Hidden TablixBody TablixRows TablixRow TablixCells TablixCell CellContents TablixColumnHierarchy
+TablixRowHierarchy TablixMembers TablixMember TablixHeader Group GroupExpressions GroupExpression
+SortExpressions SortExpression PageHeader PageFooter DataSourceReference SharedDataSetReference
+SharedDataSet RptDataSource DataSourceDefinition Extension Name ValidValues DataSetReference
+DataSetName ParameterValues ParameterValue Label Code Variables Variable EmbeddedImages
+EmbeddedImage ChartData ChartSeriesCollection ChartSeries ChartDataPoints ChartDataPoint
+ChartDataPointValues ChartCategoryHierarchy ChartMembers ChartMember ChartTitle Caption ToolTip
+Action Hyperlink Drillthrough Parameters Parameter MapLayers LinearGauges LinearGauge
+RadialGauges RadialGauge Prompt
+""".split())
+NOTE = "(File names, element names and messages are omitted here on purpose. Run the validate-rdl skill for details.)"
 
 
 def _rule_title(rule: str, rules: dict) -> str:
@@ -32,11 +52,10 @@ def _rule_title(rule: str, rules: dict) -> str:
 
 def _location(raw: object) -> str:
     text = _NAME_SEG.sub("", str(raw))
-    return text if _LOCATION_OK.match(text) else "<location-withheld>"
-
-
-def _filename(name: str) -> str:
-    return name if _FILENAME_OK.match(name) else "<file>"
+    segments = [seg for seg in text.split("/") if seg][:MAX_SEGMENTS]
+    if not segments:
+        return "<root>"
+    return "/".join(seg if _SEGMENT_OK.match(seg) and seg in KNOWN_ELEMENTS else "?" for seg in segments)
 
 
 def _resolve(payload: dict) -> Path | None:
@@ -65,7 +84,7 @@ def build_context(payload: dict) -> str | None:
     summary = doc["summary"]
     status = "FAIL" if doc["status"] == "FAIL" else "PASS"
     counts = tuple(int(summary.get(k, 0)) for k in ("errors", "warnings", "info"))
-    lines = [f"SSRS Report Workbench rdl-validate: {_filename(path.name)} -> {status} "
+    lines = [f"SSRS Report Workbench rdl-validate: the edited file -> {status} "
              f"({counts[0]} errors, {counts[1]} warnings, {counts[2]} info)", NOTE]
     findings = list(doc["files"][0]["findings"]) if doc["files"] else []
     findings.sort(key=lambda f: SEVERITY_ORDER.get(f.get("severity"), 3))
