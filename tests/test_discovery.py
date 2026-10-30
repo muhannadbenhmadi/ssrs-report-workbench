@@ -71,6 +71,12 @@ class DiscoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             questions({"schema_version": 0, "counts": {}})
 
+    def test_rsds_is_rdl(self):
+        (self.root / "reports/shared.rsds").write_text("<DataSourceDefinition/>", encoding="utf-8")
+        r = inventory(self.root)
+        self.assertEqual(r["counts"]["rdl"], 2)
+        self.assertEqual(r["files"]["reports/shared.rsds"]["kind"], "rdl")
+
     def test_no_writes(self):
         before = sorted(x.relative_to(self.root).as_posix() for x in self.root.rglob("*"))
         inventory(self.root)

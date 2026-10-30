@@ -3,3 +3,7 @@
 *.py text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
+*.rdl text eol=lf
+*.rds text eol=lf
+*.rsds text eol=lf
+*.rsd text eol=lf

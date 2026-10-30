@@ -1,0 +1,14 @@
+{
+  "name": "ssrs-report-workbench",
+  "description": "SSRS RDL and Dynamics 365 RDP engineering workflows for Claude Code.",
+  "owner": {"name": "muhannadbenhmadi", "url": "https://github.com/muhannadbenhmadi"},
+  "plugins": [
+    {
+      "name": "ssrs-report-workbench",
+      "source": "./",
+      "description": "Offline, read-only SSRS RDL validation, discovery and diagnostics.",
+      "category": "development",
+      "tags": ["ssrs", "rdl", "dynamics365", "reporting"]
+    }
+  ]
+}
