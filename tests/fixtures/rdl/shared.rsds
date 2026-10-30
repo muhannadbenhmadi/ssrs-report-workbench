@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DataSourceDefinition xmlns="http://schemas.microsoft.com/sqlserver/reporting/2010/01/datasourcedefinition">
+  <Extension>SQL</Extension>
+  <ConnectString>Data Source=localhost;Initial Catalog=Demo</ConnectString>
+  <ImpersonateUser>false</ImpersonateUser>
+</DataSourceDefinition>
