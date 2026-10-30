@@ -1,49 +1,51 @@
 # SSRS Report Workbench
 
-Claude Code plugin foundation for **two future, independently developed modules**:
+Claude Code plugin with independent **SSRS RDL** and **Dynamics 365 Finance & Operations RDP** workflows.
 
-- **SSRS RDL:** XML definitions, datasets, SQL and report rendering.
-- **Dynamics 365 Finance & Operations RDP:** X++ data providers, contracts and report metadata.
+## Implemented
 
-**Scope:** PR-01 foundation (version 0.1.0) only. No RDL/RDP generator, Report Server connector, deployment action or production-readiness claim.
+PR-01: Manifest, diagnostic skill, offline tests and CI.
+
+PR-02 (proposed): read-only source discovery, SHA-256 inventory/index, CLI-driven requirements question generator. Neither module includes a report generator, parser/semantic validator, runtime connector or deployment function yet.
 
 ## Requirements
 
-- Python 3.11+ (standard library only)
-- Claude Code CLI for actual plugin loading/validation (optional for Python tests)
+Python 3.11+ (standard library only). Claude Code CLI is needed for plugin runtime and CLI validation.
 
-## Validation
+## Discovery (read-only)
 
 ```powershell
-python scripts/diagnose.py --root . --json
+python scripts/discovery.py --root "C:\\Path\\To\\Project" > inventory.json
+python scripts/requirements_wizard.py --index inventory.json
 python -m unittest discover -s tests -v
 python -m compileall -q scripts tests
 claude plugin validate . --strict
-claude --plugin-dir .
 ```
 
-In Claude Code: `/ssrs-report-workbench:diagnose`.
+Do not use PowerShell redirection to write indexes into sensitive source trees without authorization. Generated indexes contain file paths and hashes; store them in a trusted local directory. To diff against an earlier inventory, add `--previous inventory.json`. Do not overwrite an index while simultaneously reading it.
 
-The Python diagnostic verifies the manifest and diagnostic skill; it does **not** verify RDL compilation, X++ builds, SSRS rendering or Claude's plugin validator.
+In Claude Code: `/ssrs-report-workbench:diagnose` or `/ssrs-report-workbench:discover`.
 
-## Safe-by-default behavior
+The discovery command classifies **extensions only**. It does not prove SSRS compatibility, Dynamics RDP semantics, report security, or deployment readiness. Generic XML is explicitly a candidate. Warnings indicate incomplete coverage.
 
-- Diagnostic is offline/read-only and does not execute report content.
-- CI uses synthetic fixtures, never connects to production, and needs no secrets.
-- Separate RDL and RDP validation/release gates.
-- No external application code modifications or automatic deployment.
+## Safety
+
+Offline and read-only by default, no SQL credentials, connections or report execution; no automatic edits or deployment. Windows and Linux CI with synthetic fixtures.
+
+## Documentation
+
+- [Discovery contract](docs/PR-02-discovery-contract.md)
+- [Architecture decision](docs/ADR-0001-architecture.md)
+- [Security](SECURITY.md)
 
 ## Roadmap
 
-PR-02 discovery and indexing; PR-03 RDL static checks; PR-04 RDL generation; PR-05 Dynamics RDP indexing; PR-06 Dynamics generation; PR-07 evidence/evals/checkpoints. Future capabilities are not implemented yet.
+PR-03 RDL static validation; PR-04 generation and RTL; PR-05 Dynamics RDP semantic inspection; PR-06 generation; PR-07 checkpoints/evals/Obsidian.
 
-## Official references
+## Reference documentation
 
 - https://code.claude.com/docs/en/plugins/create
-- https://code.claude.com/docs/en/plugins-reference
 - https://code.claude.com/docs/en/skills
 - https://learn.microsoft.com/en-us/sql/reporting-services/plan-for-report-design-and-report-deployment-reporting-services
 
-## License
-
-No license has been selected. The owner should select a license before assuming open-source reuse permissions.
+License has not been selected.
