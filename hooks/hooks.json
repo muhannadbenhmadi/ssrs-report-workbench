@@ -1,0 +1,17 @@
+{
+  "description": "Validates SSRS .rdl/.rds/.rsds files after Claude writes or edits them (offline, read-only, never blocks).",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in python3 python py; do \"$py\" -c \"import sys\" >/dev/null 2>&1 && exec \"$py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/rdl_hook.py\"; done; exit 0",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
