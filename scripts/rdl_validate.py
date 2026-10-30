@@ -80,7 +80,8 @@ RTL_LANGS = {"ar", "he", "fa", "ur"}
 FIELD_RE = re.compile(r"Fields!([A-Za-z_][A-Za-z0-9_]*)")
 PARAM_RE = re.compile(r"Parameters!([A-Za-z_][A-Za-z0-9_]*)")
 # VB string literal: double-quoted, with "" as the escaped quote. Removed before reference matching.
-VB_STRING_RE = re.compile(r'"(?:[^"]|"")*"')
+VB_STRING_RE = re.compile(r'"[^"]*(?:""[^"]*)*"')  # unrolled: linear, no alternation per char
+QUERY_PARAM_RE = re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)")
 STATUS_EXIT = {"PASS": 0, "FAIL": 1, "INCOMPLETE": 2}
 CRED_RE = re.compile(r"(?i)\b(password|pwd|user id|uid)\s*=")
 SIZE_RE = re.compile(r"^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(cm|mm|in|pt|pc)\s*$")
@@ -294,10 +295,12 @@ def _fields_of(dataset: ET.Element) -> set[str]:
 
 def _check_expressions(root, elems, by_tag, parents, params, add: Adder) -> None:
     datasets = {d.get("Name", "").lower(): d for d in by_tag.get("DataSet", [])}
+    fields_by_dataset = {key: _fields_of(d) for key, d in datasets.items()}
     used: set[str] = set()
     # "@Name" inside query text is the usual way a parameter feeds a query, with or without an
-    # explicit QueryParameters mapping, so it counts as a use.
-    query_text = " ".join(_text(c).lower() for c in by_tag.get("CommandText", []))
+    # explicit QueryParameters mapping, so it counts as a use. Whole tokens only (@Year != @YearEnd).
+    query_params = {m.group(1).lower() for c in by_tag.get("CommandText", [])
+                    for m in QUERY_PARAM_RE.finditer(_text(c))}
     for e in elems:
         raw = _text(e)
         if not raw.startswith("="):
@@ -312,19 +315,19 @@ def _check_expressions(root, elems, by_tag, parents, params, add: Adder) -> None
             continue
         # Aggregates and lookups name their scope as a string literal: First(Fields!X.Value, "Other").
         # Any literal that matches a dataset name widens the set of datasets the fields may come from.
-        literal_scopes = [datasets[lit.strip('"').lower()] for lit in VB_STRING_RE.findall(raw)
-                          if lit.strip('"').lower() in datasets]
         scope = _scope_dataset(e, parents, datasets)
-        candidates = ([scope] if scope is not None else []) + literal_scopes
+        keys = dict.fromkeys(([scope.get("Name", "").lower()] if scope is not None else [])
+                             + [lit[1:-1].lower() for lit in VB_STRING_RE.findall(raw)])
+        candidates = [k for k in keys if k in datasets]  # deduped, in order of appearance
         if not candidates:
             continue
-        fields = set().union(*(_fields_of(d) for d in candidates))
-        label = "', '".join(dict.fromkeys(d.get("Name", "") for d in candidates))
+        fields = set().union(*(fields_by_dataset[k] for k in candidates))
+        label = "', '".join(datasets[k].get("Name", "") for k in candidates)
         for n in names:
             if n.lower() not in fields:
                 add("RDL021", "warning", e, f"Fields!{n} is not a field of dataset '{label}'")
     for key, p in params.items():
-        if key and key not in used and f"@{key}" not in query_text:
+        if key and key not in used and key not in query_params:
             add("RDL022", "info", p, f"ReportParameter '{p.get('Name')}' is never referenced by an expression or query")
 
 

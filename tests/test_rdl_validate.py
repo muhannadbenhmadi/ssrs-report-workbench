@@ -462,10 +462,20 @@ class RdlValidateTests(unittest.TestCase):
         self.assertIn("Company", f[0].message)
 
     def test_rdl022_query_text_parameter_counts_as_used(self):
-        body = (f"{DS}<DataSets>{dataset('D1', command='SELECT * FROM t WHERE y = @Year')}</DataSets>"
-                f"<ReportParameters>{param('Year')}{param('Unused')}</ReportParameters>" + section())
+        body = (f"{DS}<DataSets>{dataset('D1', command='SELECT * FROM t WHERE y = @YearEnd')}</DataSets>"
+                f"<ReportParameters>{param('YearEnd')}{param('Year')}{param('Unused')}</ReportParameters>"
+                + section())
         f = [x for x in check(body) if x.rule == "RDL022"]
-        self.assertEqual([x.location.split("'")[1] for x in f], ["Unused"])
+        # @YearEnd uses YearEnd only; Year is not a prefix match.
+        self.assertEqual(sorted(x.location.split("'")[1] for x in f), ["Unused", "Year"])
+
+    def test_large_expression_is_linear(self):
+        import time
+        big = '="' + ("x" * 200000) + '" & Fields!A.Value & "' + ('""' * 50000) + '"'
+        body = f"{DS}<DataSets>{dataset('D1', ('A',))}</DataSets>" + section(textbox("T1", big))
+        start = time.perf_counter()
+        self.assertNotIn("RDL021", rules_of(check(body)))
+        self.assertLess(time.perf_counter() - start, 5.0)
 
     def test_strip_vb_strings(self):
         from scripts.rdl_validate import strip_vb_strings
