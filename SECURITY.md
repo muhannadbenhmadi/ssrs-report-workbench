@@ -1,0 +1,13 @@
+# Security Policy
+
+## Safe defaults
+
+The PR-01 diagnostics must remain offline and read-only. They do not connect to SQL Server, SSRS, Power BI Report Server or Dynamics 365 and do not execute reports, scripts discovered in a user workspace, or deployments.
+
+Do not commit connection strings with secrets, API keys, report data, real employee information, or production database exports. Use synthetic test fixtures and scrub local diagnostic logs. Runtime adapters in future PRs will require explicit authorization and independent access reviews.
+
+The static diagnostic does not evaluate the security of an RDL or an X++ reporting implementation. A pass means only that the foundation manifest and skill passed their local checks.
+
+## Reporting vulnerabilities
+
+Report suspected vulnerabilities privately to the repository owner rather than including exploit details or credentials in public issues. There is no guaranteed response SLA.

@@ -1,0 +1,18 @@
+{
+  "name": "ssrs-report-workbench",
+  "displayName": "SSRS Report Workbench",
+  "version": "0.1.0",
+  "description": "Read-only diagnostics and future engineering workflows for SSRS RDL and Dynamics 365 RDP.",
+  "author": {
+    "name": "SSRS Report Workbench Contributors"
+  },
+  "homepage": "https://github.com/muhannadbenhmadi/ssrs-report-workbench",
+  "repository": "https://github.com/muhannadbenhmadi/ssrs-report-workbench",
+  "keywords": [
+    "ssrs",
+    "rdl",
+    "dynamics365",
+    "rdp",
+    "reporting"
+  ]
+}
