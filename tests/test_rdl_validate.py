@@ -139,12 +139,16 @@ class RdlValidateTests(unittest.TestCase):
 
     # ---- names and references ----
     def test_rdl010_duplicate_names_case_insensitive(self):
-        body = section(textbox("A") + textbox("a"))
-        self.assertIn("RDL010", rules_of(check(body)))
-        body = f"{DS}<DataSets>{dataset('D')}{dataset('d')}</DataSets>" + section()
-        self.assertIn("RDL010", rules_of(check(body)))
-        body = f"<ReportParameters>{param('P')}{param('p')}</ReportParameters>" + section()
-        self.assertIn("RDL010", rules_of(check(body)))
+        def sev(body):
+            return [x.severity for x in check(body) if x.rule == "RDL010"]
+        # Case-only collisions are warnings: Microsoft-shipped designer reports contain them.
+        self.assertEqual(sev(section(textbox("A") + textbox("a"))), ["warning"])
+        self.assertEqual(sev(f"{DS}<DataSets>{dataset('D')}{dataset('d')}</DataSets>" + section()), ["warning"])
+        self.assertEqual(sev(f"<ReportParameters>{param('P')}{param('p')}</ReportParameters>" + section()),
+                         ["warning"])
+        # Exact duplicates are errors.
+        self.assertEqual(sev(section(textbox("A") + textbox("A"))), ["error"])
+        self.assertEqual(sev(f"{DS}<DataSets>{dataset('D')}{dataset('D')}</DataSets>" + section()), ["error"])
 
     def test_rdl010_same_name_across_categories_ok(self):
         body = f"{DS}<DataSets>{dataset('X')}</DataSets>" + section(textbox("X"))
@@ -350,9 +354,11 @@ class RdlValidateTests(unittest.TestCase):
         shared = ('<DataSets><DataSet Name="D1"><SharedDataSet><SharedDataSetReference>/Sets/Common'
                   "</SharedDataSetReference></SharedDataSet></DataSet></DataSets>")
         body = ds + shared + section()
-        # Without project stems (single-file mode) the rule is skipped.
+        # Without project stems (single-file mode) the rule is skipped, and also when the scanned
+        # root holds no shared files at all (references then live on the report server).
         self.assertNotIn("RDL062", rules_of(check(body)))
-        miss = [x for x in check(body, project_stems=set()) if x.rule == "RDL062"]
+        self.assertNotIn("RDL062", rules_of(check(body, project_stems=set())))
+        miss = [x for x in check(body, project_stems={"unrelated"}) if x.rule == "RDL062"]
         self.assertEqual(len(miss), 2)
         self.assertEqual(miss[0].severity, "warning")
         hit = check(body, project_stems={"shared one", "common"})
@@ -374,9 +380,98 @@ class RdlValidateTests(unittest.TestCase):
     def test_root_no_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             doc = validate_root(Path(tmp))
-        self.assertEqual(doc["status"], "PASS")
+        self.assertEqual(doc["status"], "INCOMPLETE")
+        self.assertFalse(doc["coverage_complete"])
         self.assertEqual(doc["summary"]["files"], 0)
         self.assertEqual(doc["warnings"], [{"path": ".", "reason": "no-candidates"}])
+
+    def test_root_coverage_complete_when_nothing_skipped(self):
+        doc = validate_root(FIXTURES)
+        self.assertTrue(doc["coverage_complete"])
+        self.assertEqual(doc["warnings"], [])
+
+    def test_root_incomplete_never_reports_pass(self):
+        from scripts.discovery import MAX_FILE_SIZE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            root.joinpath("ok.rdl").write_bytes(rdl(section()))
+            with (root / "big.rdl").open("wb") as f:
+                f.truncate(MAX_FILE_SIZE + 1)
+            doc = validate_root(root)
+        self.assertEqual(doc["status"], "INCOMPLETE")
+        self.assertFalse(doc["coverage_complete"])
+        self.assertEqual(doc["summary"]["files"], 1)
+        self.assertEqual(doc["summary"]["errors"], 0)
+
+    def test_root_errors_outrank_incomplete(self):
+        from scripts.discovery import MAX_FILE_SIZE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            root.joinpath("bad.rdl").write_bytes(rdl(section(width="200in")))
+            with (root / "big.rdl").open("wb") as f:
+                f.truncate(MAX_FILE_SIZE + 1)
+            doc = validate_root(root)
+        self.assertEqual(doc["status"], "FAIL")
+        self.assertFalse(doc["coverage_complete"])
+
+    def test_string_literal_references_are_not_references(self):
+        body = (f"{DS}<DataSets>{dataset('D1', ('A',))}</DataSets>"
+                f"<ReportParameters>{param('Year')}</ReportParameters>" + section(
+                    textbox("T1", '="Parameters!NotAParameter.Value"')
+                    + textbox("T2", '="Fields!Missing.Value"')
+                    + textbox("T3", '="He said ""Parameters!Nope.Value"" and ""Fields!Nope.Value"""')
+                    + textbox("T4", '=Parameters!Year.Value &amp; " Fields!Ghost.Value Parameters!Ghost.Value"')))
+        rules = rules_of(check(body))
+        self.assertNotIn("RDL020", rules)
+        self.assertNotIn("RDL021", rules)
+        self.assertNotIn("RDL022", rules)  # Year is really referenced in T4
+
+    def test_references_outside_string_literals_still_checked(self):
+        body = (f"{DS}<DataSets>{dataset('D1', ('A',))}</DataSets>"
+                f"<ReportParameters>{param('Year')}</ReportParameters>" + section(
+                    textbox("T1", '="Label: " &amp; Parameters!Missing.Value &amp; Fields!Nope.Value')))
+        rules = rules_of(check(body))
+        self.assertIn("RDL020", rules)
+        self.assertIn("RDL021", rules)
+
+    def test_rdl011_missing_or_empty_data_source_name(self):
+        missing = '<DataSet Name="D1"><Query><CommandText>SELECT 1</CommandText></Query></DataSet>'
+        empty = ('<DataSet Name="D1"><Query><DataSourceName> </DataSourceName>'
+                 "<CommandText>SELECT 1</CommandText></Query></DataSet>")
+        for ds in (missing, empty):
+            f = [x for x in check(f"{DS}<DataSets>{ds}</DataSets>" + section()) if x.rule == "RDL011"]
+            self.assertEqual(len(f), 1, ds)
+            self.assertEqual(f[0].severity, "error")
+            self.assertIn("missing or empty", f[0].message)
+        resolved = f"{DS}<DataSets>{dataset('D1')}</DataSets>" + section()
+        self.assertNotIn("RDL011", rules_of(check(resolved)))
+        shared = ('<DataSet Name="D1"><SharedDataSet><SharedDataSetReference>Shared'
+                  "</SharedDataSetReference></SharedDataSet></DataSet>")
+        self.assertNotIn("RDL011", rules_of(check(f"<DataSets>{shared}</DataSets>" + section())))
+
+    def test_rdl021_aggregate_scope_literal(self):
+        ds = f"{DS}<DataSets>{dataset('Orders', ('Total',))}{dataset('Company', ('PrimaryColor',))}</DataSets>"
+        tablix = ('<Tablix Name="T"><DataSetName>Orders</DataSetName><TablixBody><TablixRows><TablixRow>'
+                  "<TablixCells><TablixCell><CellContents>"
+                  + textbox("T1", '=First(Fields!PrimaryColor.Value, "Company")')
+                  + textbox("T2", '=First(Fields!Nope.Value, "Company")')
+                  + "</CellContents></TablixCell></TablixCells></TablixRow></TablixRows></TablixBody></Tablix>")
+        f = [x for x in check(ds + section(tablix)) if x.rule == "RDL021"]
+        self.assertEqual(len(f), 1)
+        self.assertIn("Nope", f[0].message)
+        self.assertIn("Company", f[0].message)
+
+    def test_rdl022_query_text_parameter_counts_as_used(self):
+        body = (f"{DS}<DataSets>{dataset('D1', command='SELECT * FROM t WHERE y = @Year')}</DataSets>"
+                f"<ReportParameters>{param('Year')}{param('Unused')}</ReportParameters>" + section())
+        f = [x for x in check(body) if x.rule == "RDL022"]
+        self.assertEqual([x.location.split("'")[1] for x in f], ["Unused"])
+
+    def test_strip_vb_strings(self):
+        from scripts.rdl_validate import strip_vb_strings
+        self.assertEqual(strip_vb_strings('="a"'), '=""')
+        self.assertEqual(strip_vb_strings('="say ""hi"" " & X'), '="" & X')
+        self.assertEqual(strip_vb_strings("=Fields!A.Value"), "=Fields!A.Value")
 
     def test_root_status_and_summary(self):
         doc = validate_root(FIXTURES)
@@ -412,6 +507,7 @@ class RdlValidateTests(unittest.TestCase):
             doc = validate_root(root)
         self.assertIn({"path": "big.rdl", "reason": "oversize"}, doc["warnings"])
         self.assertEqual(doc["summary"]["files"], 0)
+        self.assertEqual(doc["status"], "INCOMPLETE")
 
     def test_symlink_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -488,6 +584,16 @@ class RdlValidateTests(unittest.TestCase):
         missing = self._cli("--file", "tests/fixtures/rdl/nope.rdl", "--json")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stderr)["status"], "FAIL")
+
+    def test_cli_incomplete_exit_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = self._cli("--root", tmp, "--json")
+            human = self._cli("--root", tmp)
+        self.assertEqual(empty.returncode, 2, empty.stderr)
+        doc = json.loads(empty.stdout)
+        self.assertEqual(doc["status"], "INCOMPLETE")
+        self.assertFalse(doc["coverage_complete"])
+        self.assertIn("coverage incomplete", human.stdout)
 
 
 if __name__ == "__main__":

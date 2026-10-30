@@ -20,8 +20,8 @@ Run the plugin's offline static checker on RDL files and explain the results. Th
 
    - Requires Python 3.11+ and nothing else.
    - On Windows use `python` (or `py -3`). On Linux or macOS use `python3` when `python` is absent.
-   - Exit code 0 means PASS, 1 means FAIL or a fatal error (details on stderr as JSON).
-4. Parse the JSON. Read `status`, `summary`, each `files[].findings[]` and the top-level `warnings[]` (oversize, symlink, `no-candidates`).
+   - Exit code 0 means PASS, 1 means FAIL or a fatal error (details on stderr as JSON), 2 means INCOMPLETE (no errors, but some candidate files were skipped or none were found).
+4. Parse the JSON. Read `status`, `coverage_complete`, `summary`, each `files[].findings[]` and the top-level `warnings[]` (oversize, symlink, `no-candidates`).
 5. Group findings by file, then by severity: `error`, `warning`, `info`.
 6. For each distinct rule id, read `references/rules.md` for the meaning, the basis URL and the usual fix. Quote the finding's `location` and `message` as evidence.
 7. Open the flagged element in the RDL only when the message is not enough to explain the problem.
@@ -46,7 +46,7 @@ When `Report/Language` is `ar`, `he`, `fa` or `ur`, or the user asks about Arabi
 
 Return:
 
-- Verdict: PASS, FAIL or BLOCKED (BLOCKED when Python is missing, the path is unreadable or the script errors).
+- Verdict: PASS, FAIL, INCOMPLETE or BLOCKED. Report INCOMPLETE exactly as the validator does when `coverage_complete` is false; never upgrade it to PASS. BLOCKED means Python is missing, the path is unreadable or the script errors.
 - The exact command run and its exit code.
 - Counts: files, errors, warnings, info.
 - Findings table: file, rule, severity, location, explanation, suggested fix.

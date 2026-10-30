@@ -46,7 +46,7 @@ RULES: dict[str, dict[str, str]] = {
     "RDL001": _rule("File is well-formed XML with no DTD or entity declaration", "error", "XML; safety"),
     "RDL002": _rule("Root is Report in a supported namespace (legacy namespaces warn)", "error", _MSRDL + " 1.3.3.1"),
     "RDL003": _rule("Version-specific required structure is present", "error", _MSRDL + " Report; 2016/01 XSD"),
-    "RDL010": _rule("Names are unique (case-insensitive) within their scope", "error", "RDL overview; " + _MSRDL + " glossary"),
+    "RDL010": _rule("Names are unique within their scope (exact duplicate is an error, case-only a warning)", "error", "RDL overview; " + _MSRDL + " glossary"),
     "RDL011": _rule("DataSet Query/DataSourceName names an existing DataSource", "error", "2016/01 XSD + logic"),
     "RDL012": _rule("DataSet has non-empty Query/CommandText unless it is shared", "error", "2016/01 XSD"),
     "RDL013": _rule("DataSource has not both ConnectionProperties and DataSourceReference", "error", _MSRDL + " DataSource.ConnectionProperties"),
@@ -79,6 +79,9 @@ DIRECTION_HOSTS = {"TextRun", "Subreport", "Chart", "LinearGauge", "RadialGauge"
 RTL_LANGS = {"ar", "he", "fa", "ur"}
 FIELD_RE = re.compile(r"Fields!([A-Za-z_][A-Za-z0-9_]*)")
 PARAM_RE = re.compile(r"Parameters!([A-Za-z_][A-Za-z0-9_]*)")
+# VB string literal: double-quoted, with "" as the escaped quote. Removed before reference matching.
+VB_STRING_RE = re.compile(r'"(?:[^"]|"")*"')
+STATUS_EXIT = {"PASS": 0, "FAIL": 1, "INCOMPLETE": 2}
 CRED_RE = re.compile(r"(?i)\b(password|pwd|user id|uid)\s*=")
 SIZE_RE = re.compile(r"^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(cm|mm|in|pt|pc)\s*$")
 
@@ -93,6 +96,11 @@ class Finding:
     def to_dict(self) -> dict[str, str]:
         return {"rule": self.rule, "severity": self.severity,
                 "location": self.location, "message": self.message}
+
+
+def strip_vb_strings(expression: str) -> str:
+    """Replace every VB string literal with "" so text inside quotes is never read as a reference."""
+    return VB_STRING_RE.sub('""', expression)
 
 
 def parse_size(value: str) -> float | None:
@@ -193,7 +201,9 @@ def validate_rdl_bytes(data: bytes, *, project_stems: set[str] | None = None) ->
     for e in by_tag.get("ConnectString", []):
         add_f(_credential_finding(e, loc(e)))
     _check_rtl(root, by_tag, parents, add)
-    if project_stems is not None:
+    # Only meaningful when the scanned root actually holds shared files; otherwise the references
+    # most likely point at items that live on the report server.
+    if project_stems:
         for tag in ("DataSourceReference", "SharedDataSetReference"):
             for e in by_tag.get(tag, []):
                 ref = _text(e)
@@ -240,8 +250,13 @@ def _check_names(by_tag: dict[str, list[ET.Element]], add: Adder) -> None:
                 if not name:
                     continue
                 key = name.lower()
-                if key in seen:
-                    add("RDL010", "error", e, f"Duplicate {label} name '{name}' (first seen as '{seen[key]}')")
+                if key in seen and seen[key] == name:
+                    add("RDL010", "error", e, f"Duplicate {label} name '{name}'")
+                elif key in seen:
+                    # Designer-saved Microsoft reports exist with names differing only by case, so this
+                    # is a warning: expressions compare identifiers case-insensitively and may be ambiguous.
+                    add("RDL010", "warning", e,
+                        f"{label} name '{name}' differs only by case from '{seen[key]}'")
                 else:
                     seen[key] = name
 
@@ -256,22 +271,38 @@ def _check_datasets_sources(by_tag: dict[str, list[ET.Element]], sources: dict[s
             add("RDL014", "error", p, f"DataType '{dtype}' is not one of {', '.join(sorted(DATA_TYPES))}")
     for ds in by_tag.get("DataSet", []):
         query = _kid(ds, "Query")
-        if _kid(ds, "SharedDataSet") is None and not _text(_kid(query, "CommandText") if query is not None else None):
+        shared = _kid(ds, "SharedDataSet") is not None
+        if not shared and not _text(_kid(query, "CommandText") if query is not None else None):
             add("RDL012", "error", ds, "DataSet has no Query/CommandText and is not a SharedDataSet")
-        name_el = _kid(query, "DataSourceName") if query is not None else None
+        if query is None:
+            continue
+        name_el = _kid(query, "DataSourceName")
         ref = _text(name_el)
-        if name_el is not None and ref and not ref.startswith("=") and ref.lower() not in sources:
+        if not ref:
+            if not shared:
+                add("RDL011", "error", name_el if name_el is not None else query,
+                    "Embedded DataSet Query has a missing or empty DataSourceName")
+            continue
+        if not ref.startswith("=") and ref.lower() not in sources:
             known = ", ".join(sorted(sources.values())) or "none"
             add("RDL011", "error", name_el, f"DataSourceName '{ref}' does not match any DataSource (known: {known})")
+
+
+def _fields_of(dataset: ET.Element) -> set[str]:
+    return {f.get("Name", "").lower() for f in dataset.iter() if _ln(f) == "Field"}
 
 
 def _check_expressions(root, elems, by_tag, parents, params, add: Adder) -> None:
     datasets = {d.get("Name", "").lower(): d for d in by_tag.get("DataSet", [])}
     used: set[str] = set()
+    # "@Name" inside query text is the usual way a parameter feeds a query, with or without an
+    # explicit QueryParameters mapping, so it counts as a use.
+    query_text = " ".join(_text(c).lower() for c in by_tag.get("CommandText", []))
     for e in elems:
-        text = _text(e)
-        if not text.startswith("="):
+        raw = _text(e)
+        if not raw.startswith("="):
             continue
+        text = strip_vb_strings(raw)
         for m in PARAM_RE.finditer(text):
             used.add(m.group(1).lower())
             if m.group(1).lower() not in params:
@@ -279,16 +310,22 @@ def _check_expressions(root, elems, by_tag, parents, params, add: Adder) -> None
         names = FIELD_RE.findall(text)
         if not names:
             continue
+        # Aggregates and lookups name their scope as a string literal: First(Fields!X.Value, "Other").
+        # Any literal that matches a dataset name widens the set of datasets the fields may come from.
+        literal_scopes = [datasets[lit.strip('"').lower()] for lit in VB_STRING_RE.findall(raw)
+                          if lit.strip('"').lower() in datasets]
         scope = _scope_dataset(e, parents, datasets)
-        if scope is None:
+        candidates = ([scope] if scope is not None else []) + literal_scopes
+        if not candidates:
             continue
-        fields = {f.get("Name", "").lower() for f in scope.iter() if _ln(f) == "Field"}
+        fields = set().union(*(_fields_of(d) for d in candidates))
+        label = "', '".join(dict.fromkeys(d.get("Name", "") for d in candidates))
         for n in names:
             if n.lower() not in fields:
-                add("RDL021", "warning", e, f"Fields!{n} is not a field of dataset '{scope.get('Name')}'")
+                add("RDL021", "warning", e, f"Fields!{n} is not a field of dataset '{label}'")
     for key, p in params.items():
-        if key and key not in used:
-            add("RDL022", "info", p, f"ReportParameter '{p.get('Name')}' is never referenced by an expression")
+        if key and key not in used and f"@{key}" not in query_text:
+            add("RDL022", "info", p, f"ReportParameter '{p.get('Name')}' is never referenced by an expression or query")
 
 
 def _scope_dataset(el, parents, datasets):
@@ -448,8 +485,11 @@ def _document(files: list[dict], warnings: list[dict], unreadable: bool = False)
         for x in f["findings"]:
             counts[x["severity"]] += 1
     failed = counts["error"] > 0 or unreadable
+    # Any skipped, unreadable or absent candidate means the scan did not cover everything asked for.
+    coverage_complete = not warnings
+    status = "FAIL" if failed else ("PASS" if coverage_complete else "INCOMPLETE")
     return {"schema_version": 1, "mode": "read-only", "tool": TOOL,
-            "status": "FAIL" if failed else "PASS",
+            "status": status, "coverage_complete": coverage_complete,
             "summary": {"files": len(files), "errors": counts["error"],
                         "warnings": counts["warning"], "info": counts["info"]},
             "files": files, "warnings": warnings}
@@ -511,8 +551,9 @@ def render_human(doc: dict) -> str:
         lines += [f"  {x['severity']} {x['rule']} {x['location']}: {x['message']}" for x in f["findings"]]
     lines += [f"WARN {w['path']}: {w['reason']}" for w in doc["warnings"]]
     s = doc["summary"]
+    coverage = "" if doc.get("coverage_complete", True) else " (coverage incomplete)"
     lines.append(f"{doc['status']}: {_plural(s['files'], 'file')}, {_plural(s['errors'], 'error')}, "
-                 f"{_plural(s['warnings'], 'warning')}, {s['info']} info")
+                 f"{_plural(s['warnings'], 'warning')}, {s['info']} info{coverage}")
     return "\n".join(lines)
 
 
@@ -542,7 +583,7 @@ def run(argv: list[str] | None = None) -> int:
             print(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True))
         else:
             print(render_human(doc))
-        return 0 if doc["status"] == "PASS" else 1
+        return STATUS_EXIT.get(doc["status"], 1)
     except (OSError, ValueError, TypeError) as exc:
         print(json.dumps({"status": "FAIL", "error": type(exc).__name__, "detail": str(exc)}), file=sys.stderr)
         return 1

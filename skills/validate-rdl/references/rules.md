@@ -33,10 +33,10 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Typical fix: Add the missing element, or move 2008-style top-level elements into a `ReportSection` when targeting 2010/01 or 2016/01.
 - Basis: [MS-RDL Report][rep]; [2016/01 XSD][xsd].
 
-### RDL010 — Names are unique (case-insensitive) within their scope
-- Severity: error
+### RDL010 — Names are unique within their scope (exact duplicate is an error, case-only a warning)
+- Severity: error for an exact duplicate, warning when two names differ only by case
 - What it checks: Duplicate `Name` among `DataSource`, among `DataSet`, among `ReportParameter`, and among report items (Textbox, Tablix, Rectangle, Image, Line, Subreport, Chart, GaugePanel, Map, CustomReportItem).
-- Why it matters: Names must be unique in the innermost named scope, and CLS identifiers differing only by case are not distinct, so `Textbox1` and `textbox1` collide.
+- Why it matters: Names must be unique in the innermost named scope. CLS identifiers differing only by case are not distinct and expressions compare identifiers case-insensitively, so `Textbox1` and `textbox1` may be ambiguous. Designer-saved Microsoft reports with case-only collisions exist and do deploy, which is why that case is a warning, not an error.
 - Typical fix: Rename one of the duplicates and update every expression that references it (`ReportItems!Name`, `Fields!`, `Parameters!`).
 - Basis: [RDL overview][ov]; [MS-RDL glossary][gl].
 
@@ -77,14 +77,14 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 
 ### RDL021 — Fields!X references a Field of the in-scope dataset
 - Severity: warning
-- What it checks: Resolves `Fields!Name` against the nearest ancestor that has a `DataSetName` child; otherwise the only dataset; otherwise the check is skipped.
-- Why it matters: A missing field gives an error value at render time. It is only a warning because scope rules (aggregates or lookups that name another dataset) are not fully evaluated.
+- What it checks: Resolves `Fields!Name` against the nearest ancestor that has a `DataSetName` child, otherwise the only dataset. Any string literal in the expression that equals a dataset name (the scope argument of `First`, `Sum`, `Lookup` and similar: `=First(Fields!X.Value, "Other")`) adds that dataset to the allowed set. Text inside VB string literals is never treated as a reference. The check is skipped when no dataset can be determined.
+- Why it matters: A missing field gives an error value at render time. It is only a warning because expression scope is not fully evaluated.
 - Typical fix: Add the field to the dataset `Fields`, correct the name, or point the data region at the right dataset.
 - Basis: Scope-dependent logic (derived).
 
 ### RDL022 — ReportParameter is referenced by some expression
 - Severity: info
-- What it checks: Flags a `ReportParameter` that no expression or `QueryParameter` uses.
+- What it checks: Flags a `ReportParameter` that no expression (`Parameters!Name`, outside string literals) and no query text (`@Name` in any `CommandText`) uses.
 - Why it matters: An unused parameter prompts the user for a value that changes nothing.
 - Typical fix: Wire it into a query or filter, or delete it. Ignore when it is intentionally unused.
 - Basis: Cross-reference logic (derived).
@@ -161,7 +161,7 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 
 ### RDL062 — Shared data source/dataset reference resolves to a file in the scanned root
 - Severity: warning
-- What it checks: With `--root`, each `DataSourceReference` and `SharedDataSetReference` is reduced to its last path segment and matched against `.rds`, `.rsds` and `.rsd` file names in the scanned folder.
+- What it checks: With `--root`, and only when the scanned folder contains at least one `.rds`, `.rsds` or `.rsd` file, each `DataSourceReference` and `SharedDataSetReference` is reduced to its last path segment and matched against those file names. A root with no shared files skips the rule, because the references then point at server-managed items.
 - Why it matters: A reference to a shared item missing from the project fails at deploy unless the item already exists on the server.
 - Typical fix: Add the shared file to the project, or ignore if the item is managed server-side.
 - Basis: Deploy logic (derived; name matching is by file stem only).

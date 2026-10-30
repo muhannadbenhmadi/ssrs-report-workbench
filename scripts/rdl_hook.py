@@ -82,7 +82,7 @@ def build_context(payload: dict) -> str | None:
         return None
     doc = validate_single(path)
     summary = doc["summary"]
-    status = "FAIL" if doc["status"] == "FAIL" else "PASS"
+    status = doc["status"] if doc["status"] in ("PASS", "FAIL", "INCOMPLETE") else "FAIL"
     counts = tuple(int(summary.get(k, 0)) for k in ("errors", "warnings", "info"))
     lines = [f"SSRS Report Workbench rdl-validate: the edited file -> {status} "
              f"({counts[0]} errors, {counts[1]} warnings, {counts[2]} info)", NOTE]

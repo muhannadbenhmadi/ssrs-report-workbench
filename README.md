@@ -51,7 +51,7 @@ python scripts/rdl_validate.py --root path/to/project --json
 python scripts/rdl_validate.py --rules
 ```
 
-Output is a JSON document: top-level `status` (`PASS` or `FAIL`) and `summary` (`files`, `errors`, `warnings`, `info`), then one entry per file with its `findings` (`rule`, `severity`, `location`, `message`). Exit code 0 means PASS; 1 means FAIL or a fatal error. A PASS means no static rule fired. It is not proof that a report deploys or renders.
+Output is a JSON document: top-level `status` (`PASS`, `FAIL` or `INCOMPLETE`), `coverage_complete` and `summary` (`files`, `errors`, `warnings`, `info`), then one entry per file with its `findings` (`rule`, `severity`, `location`, `message`). Exit code 0 means PASS; 1 means FAIL or a fatal error; 2 means INCOMPLETE (no errors, but files were skipped or none were found, so the scan is not a clean result). A PASS means no static rule fired on every candidate file. It is not proof that a report deploys or renders.
 
 - Skill: `/ssrs-report-workbench:validate-rdl <path>` runs the validator and explains each finding.
 - Agent: `@agent-ssrs-report-workbench:rdl-reviewer` is a read-only reviewer that reports with evidence and never edits or deploys.

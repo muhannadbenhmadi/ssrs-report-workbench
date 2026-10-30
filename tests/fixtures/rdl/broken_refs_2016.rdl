@@ -27,7 +27,7 @@
               <Value>=Parameters!Region.Value</Value>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
-          <Textbox Name="textbox1">
+          <Textbox Name="Textbox1">
             <Paragraphs><Paragraph><TextRuns><TextRun>
               <Value>static</Value>
             </TextRun></TextRuns></Paragraph></Paragraphs>
