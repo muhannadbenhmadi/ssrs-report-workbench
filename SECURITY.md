@@ -12,6 +12,10 @@ The static diagnostic does not evaluate the security of an RDL or an X++ reporti
 
 `scripts/rdl_validate.py` rejects any file containing `<!DOCTYPE` or `<!ENTITY` before parsing, so entity expansion and external entity attacks are not possible. It never writes into inspected directories, refuses symlinks and caps file size. Rule `RDL040` reports that a connection string carries a credential key such as `Password` or `User ID` but never echoes the value; the same applies to the hook output.
 
+## RDL semantic inspector
+
+`scripts/rdl_inspect.py` is offline and read-only. It uses an allowlist of metadata, fixed error codes and bounded JSON, excluding connection properties, queries, values, expressions, code and external paths. It refuses DTDs/entities after decoding UTF-8/UTF-16, oversized/deep/large-node XML, symlinks and Windows reparse paths. Schema names remain visible and untrusted; they may be confidential. File checks assume stable local directories and do not eliminate concurrent ancestor-replacement races. See the [inspector contract](docs/rdl-inspector-contract.md) for limits and residual risks. PR-03 protection and behavior are unchanged.
+
 ## Reporting vulnerabilities
 
 Report suspected vulnerabilities privately to the repository owner rather than including exploit details or credentials in public issues. There is no guaranteed response SLA.

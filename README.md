@@ -57,6 +57,20 @@ Output is a JSON document: top-level `status` (`PASS`, `FAIL` or `INCOMPLETE`), 
 - Agent: `@agent-ssrs-report-workbench:rdl-reviewer` is a read-only reviewer that reports with evidence and never edits or deploys.
 - Hook: a `PostToolUse` hook fires after Claude writes or edits a `.rdl`, `.rds` or `.rsds` file and adds a short validation summary to Claude's context. It is advisory, never blocks, and ignores other files. It uses the first working interpreter among `python3`, `python` and `py` (Windows Store aliases that only print an install hint are skipped). Disable it with `"disableAllHooks": true` in Claude Code settings.
 
+## RDL semantic inspection (read-only)
+
+```sh
+python scripts/rdl_inspect.py describe_report --file reports/Invoice.rdl
+python scripts/rdl_inspect.py list_datasets --file reports/Invoice.rdl --field-limit 20
+python scripts/rdl_inspect.py list_parameters --file reports/Invoice.rdl
+python scripts/rdl_inspect.py list_tablix --file reports/Invoice.rdl
+python scripts/rdl_inspect.py list_columns --file reports/Invoice.rdl --tablix-id 1
+```
+
+Skill: `/ssrs-report-workbench:inspect-rdl <path>`. Enumerates all Tablix, including nested regions and multiple report sections, with bounded metadata JSON. Modern 2008/2010/2016 RDL is supported; legacy 2003/2005 layout is explicitly incomplete. Columns are XML body columns with sampled static field references; complex grids omit guessed bindings. No ConnectStrings, SQL, parameter values, cell text or expression strings are returned. Names can still be confidential.
+
+Exit 0 means `OK` metadata, 2 means `INCOMPLETE` (inspect warnings/truncation), 1 means `ERROR`. List pages accept `--limit` and `--offset`; follow `page.next_offset`. This is separate from PR-03 validation and introduces no generator or edit planner. See the [inspector contract](docs/rdl-inspector-contract.md) and [verification evidence](docs/rdl-inspector-evidence.md).
+
 ## Safety
 
 Offline and read-only by default, no SQL credentials, connections or report execution; no automatic edits or deployment. The validator rejects `<!DOCTYPE` and `<!ENTITY` before parsing and refuses symlinks and oversized files. Credential keys in connection strings are reported without their values. Windows and Linux CI with synthetic fixtures.
@@ -65,6 +79,7 @@ Offline and read-only by default, no SQL credentials, connections or report exec
 
 - [Discovery contract](docs/PR-02-discovery-contract.md)
 - [RDL validation contract](docs/PR-03-rdl-validation-contract.md)
+- [RDL inspector contract](docs/rdl-inspector-contract.md)
 - [Architecture decision](docs/ADR-0001-architecture.md)
 - [Security](SECURITY.md)
 

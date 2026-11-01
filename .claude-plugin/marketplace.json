@@ -6,7 +6,7 @@
     {
       "name": "ssrs-report-workbench",
       "source": "./",
-      "description": "Offline, read-only SSRS RDL validation, discovery and diagnostics.",
+      "description": "Offline, read-only SSRS RDL inspection, validation, discovery and diagnostics.",
       "category": "development",
       "tags": ["ssrs", "rdl", "dynamics365", "reporting"]
     }

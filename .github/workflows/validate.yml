@@ -38,3 +38,5 @@ jobs:
         run: python scripts/diagnose.py --root . --json
       - name: Run RDL validator on fixtures (expects exit 1, broken fixture included)
         run: python -c "import subprocess,sys; r=subprocess.run([sys.executable,'scripts/rdl_validate.py','--root','tests/fixtures/rdl','--json'],capture_output=True,text=True); print(r.stdout[-1500:]); sys.exit(0 if r.returncode==1 else 1)"
+      - name: Inspect synthetic report metadata (all five interfaces)
+        run: python -c "import json,subprocess,sys; p='tests/fixtures/inspect/multi_2016.rdl'; ops=['describe_report','list_datasets','list_parameters','list_tablix','list_columns']; results=[subprocess.run([sys.executable,'scripts/rdl_inspect.py',op,'--file',p]+(['--tablix-id','1'] if op=='list_columns' else []),capture_output=True,text=True) for op in ops]; [print(r.stdout) for r in results]; sys.exit(0 if all(r.returncode==0 and json.loads(r.stdout)['status']=='OK' for r in results) else 1)"

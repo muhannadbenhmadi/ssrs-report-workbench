@@ -11,6 +11,7 @@ python -m compileall -q scripts tests
 python -m unittest discover -s tests -v
 python scripts/diagnose.py --root . --json
 python scripts/rdl_validate.py --root tests/fixtures/rdl --json
+python scripts/rdl_inspect.py describe_report --file tests/fixtures/inspect/multi_2016.rdl
 ```
 
 When Claude CLI is installed, also run `claude plugin validate . --strict` and record its result separately. The RDL validator command exits 1 by design because the fixtures include a deliberately broken file. CI must pass on Linux and Windows. Do not claim integration verification unless it actually ran.
@@ -18,3 +19,5 @@ When Claude CLI is installed, also run `claude plugin validate . --strict` and r
 ## PR evidence
 
 Include scope, baseline SHA, changed paths, tests run, unrun tests, known limitations and rollback. Minimize modifications and preserve platform separation.
+
+Inspector changes must preserve the [metadata/privacy contract](docs/rdl-inspector-contract.md), fixed error codes, output caps and explicit incomplete results. Use synthetic fixtures; do not introduce raw query/value output or couple inspection to the validator or Dynamics RDP.
