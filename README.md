@@ -48,7 +48,7 @@ The discovery command classifies **extensions only**. It does not prove SSRS com
 ```sh
 python scripts/rdl_validate.py --file reports/Invoice.rdl --json
 python scripts/rdl_validate.py --root path/to/project --json
-python scripts/rdl_validate.py --file reports/Invoice.rdl --expect-params Year,PrintedBy   # opt-in caller contract (RDL023)
+python scripts/rdl_validate.py --file reports/Invoice.rdl --expect-params Year,UserName   # opt-in caller contract (RDL023)
 python scripts/rdl_validate.py --rules
 ```
 

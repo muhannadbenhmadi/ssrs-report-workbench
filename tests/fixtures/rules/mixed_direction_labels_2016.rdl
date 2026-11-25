@@ -2,13 +2,13 @@
 <Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
   <Language>ar</Language>
   <ReportParameters>
-    <ReportParameter Name="JobKey">
+    <ReportParameter Name="Code">
       <DataType>String</DataType>
-      <Prompt>JobKey</Prompt>
+      <Prompt>Code</Prompt>
     </ReportParameter>
-    <ReportParameter Name="PrintedBy">
+    <ReportParameter Name="UserName">
       <DataType>String</DataType>
-      <Prompt>PrintedBy</Prompt>
+      <Prompt>UserName</Prompt>
     </ReportParameter>
   </ReportParameters>
   <ReportParametersLayout>
@@ -19,12 +19,12 @@
         <CellDefinition>
           <ColumnIndex>0</ColumnIndex>
           <RowIndex>0</RowIndex>
-          <ParameterName>JobKey</ParameterName>
+          <ParameterName>Code</ParameterName>
         </CellDefinition>
         <CellDefinition>
           <ColumnIndex>1</ColumnIndex>
           <RowIndex>0</RowIndex>
-          <ParameterName>PrintedBy</ParameterName>
+          <ParameterName>UserName</ParameterName>
         </CellDefinition>
       </CellDefinitions>
     </GridLayoutDefinition>
@@ -38,7 +38,7 @@
     </DataSource>
   </DataSources>
   <DataSets>
-    <DataSet Name="Header">
+    <DataSet Name="Main">
       <Query>
         <DataSourceName>Main</DataSourceName>
         <CommandText>SELECT FromDate, ToDate</CommandText>
@@ -57,37 +57,37 @@
         <ReportItems>
           <Textbox Name="SubtitleLabel">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>="الفترة: " + Format(First(Fields!FromDate.Value, "Header"), "yyyy/MM/dd") + " - " + Format(First(Fields!ToDate.Value, "Header"), "yyyy/MM/dd") + "    |    رقم المهمة:" + ChrW(8207)</Value>
+              <Value>="المدة: " + Format(First(Fields!FromDate.Value, "Main"), "yyyy/MM/dd") + " - " + Format(First(Fields!ToDate.Value, "Main"), "yyyy/MM/dd") + "    |    الرمز:" + ChrW(8207)</Value>
               <Style><Direction>RTL</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
           <Textbox Name="SubtitleValue">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>=Parameters!JobKey.Value</Value>
+              <Value>=Parameters!Code.Value</Value>
               <Style><Direction>LTR</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
-          <Textbox Name="PrintedAtLabel">
+          <Textbox Name="RunAtLabel">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>="طبع في:" &amp; ChrW(8207)</Value>
+              <Value>="التاريخ:" &amp; ChrW(8207)</Value>
               <Style><Direction>RTL</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
-          <Textbox Name="PrintedAtValue">
+          <Textbox Name="RunAtValue">
             <Paragraphs><Paragraph><TextRuns><TextRun>
               <Value>=Format(Globals!ExecutionTime, "yyyy/MM/dd HH:mm")</Value>
               <Style><Direction>LTR</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
-          <Textbox Name="PrintedByLabel">
+          <Textbox Name="UserNameLabel">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>=IIf(Len(Parameters!PrintedBy.Value) &gt; 0, "طبع بواسطة:" &amp; ChrW(8207), "")</Value>
+              <Value>=IIf(Len(Parameters!UserName.Value) &gt; 0, "المستخدم:" &amp; ChrW(8207), "")</Value>
               <Style><Direction>RTL</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
-          <Textbox Name="PrintedByValue">
+          <Textbox Name="UserNameValue">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>=Parameters!PrintedBy.Value</Value>
+              <Value>=Parameters!UserName.Value</Value>
               <Style><Direction>LTR</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>

@@ -646,7 +646,7 @@ class RdlValidateTests(unittest.TestCase):
         declared = ["UserId", "FromDate", "ToDate", "BranchId", "IsMain"]
         self.assertEqual(validate_file(fixed, expect_params=declared)["findings"], [])
         self.assertEqual(validate_file(fixed)["findings"], [])  # the rule is opt-in
-        r = validate_file(fixed, expect_params=declared + ["PrintedBy", "userid"])
+        r = validate_file(fixed, expect_params=declared + ["UserName", "userid"])
         self.assertEqual(r["status"], "FAIL")
         self.assertEqual([(f["rule"], f["severity"]) for f in r["findings"]], [("RDL023", "error")] * 2)
         r = validate_file(fixed, expect_params=declared[:4])
@@ -735,19 +735,19 @@ class RdlValidateTests(unittest.TestCase):
                     "<PageHeight>11in</PageHeight><PageWidth>8.5in</PageWidth></Page>")
             return rules_of(check(section(page=page))).count("RDL056")
 
-        damma = "طُبع"
+        damma = "مُعتمد"
         self.assertEqual(hits(damma), 1)
         self.assertEqual(hits(f'="{damma} " &amp; Globals!ExecutionTime', "PageFooter"), 1)
         self.assertEqual(hits("مٰل"), 1)                 # superscript alef U+0670
         self.assertEqual(hits("=Fields!A.Value"), 0)                    # only literals are read
-        self.assertEqual(hits("طبع ـ"), 0)           # tatweel is not a combining mark
+        self.assertEqual(hits("معتمد ـ"), 0)           # tatweel is not a combining mark
         self.assertEqual(rules_of(check(section(textbox("B", damma)))).count("RDL056"), 0)  # body text is not judged
 
     def test_cli_expect_params(self):
         path = "tests/fixtures/rules/panel_fixed_2016.rdl"
         ok = self._cli("--file", path, "--json", "--expect-params", "UserId, FromDate,ToDate,BranchId,IsMain")
         self.assertEqual((ok.returncode, json.loads(ok.stdout)["status"]), (0, "PASS"))
-        bad = self._cli("--file", path, "--json", "--expect-params", "UserId,FromDate,ToDate,BranchId,IsMain,PrintedAt")
+        bad = self._cli("--file", path, "--json", "--expect-params", "UserId,FromDate,ToDate,BranchId,IsMain,RunAt")
         self.assertEqual(bad.returncode, 1)
         self.assertEqual([f["rule"] for f in json.loads(bad.stdout)["files"][0]["findings"]], ["RDL023"])
         root = self._cli("--root", "tests/fixtures/rules", "--expect-params", "UserId")

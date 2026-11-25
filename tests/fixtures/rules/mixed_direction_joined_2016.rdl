@@ -2,9 +2,9 @@
 <Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
   <Language>ar</Language>
   <ReportParameters>
-    <ReportParameter Name="JobKey">
+    <ReportParameter Name="Code">
       <DataType>String</DataType>
-      <Prompt>JobKey</Prompt>
+      <Prompt>Code</Prompt>
     </ReportParameter>
   </ReportParameters>
   <ReportParametersLayout>
@@ -15,7 +15,7 @@
         <CellDefinition>
           <ColumnIndex>0</ColumnIndex>
           <RowIndex>0</RowIndex>
-          <ParameterName>JobKey</ParameterName>
+          <ParameterName>Code</ParameterName>
         </CellDefinition>
       </CellDefinitions>
     </GridLayoutDefinition>
@@ -28,7 +28,7 @@
         <ReportItems>
           <Textbox Name="Subtitle">
             <Paragraphs><Paragraph><TextRuns><TextRun>
-              <Value>="رقم المهمة: " &amp; Parameters!JobKey.Value</Value>
+              <Value>="الرمز: " &amp; Parameters!Code.Value</Value>
               <Style><Direction>RTL</Direction></Style>
             </TextRun></TextRuns></Paragraph></Paragraphs>
           </Textbox>
