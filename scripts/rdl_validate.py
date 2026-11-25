@@ -51,9 +51,11 @@ RULES: dict[str, dict[str, str]] = {
     "RDL012": _rule("DataSet has non-empty Query/CommandText unless it is shared", "error", "2016/01 XSD"),
     "RDL013": _rule("DataSource has not both ConnectionProperties and DataSourceReference", "error", _MSRDL + " DataSource.ConnectionProperties"),
     "RDL014": _rule("ReportParameter DataType is a valid RDL type", "error", "2016/01 XSD"),
+    "RDL015": _rule("2016/01 ReportParametersLayout grid holds exactly one cell per ReportParameter", "error", "Report Builder publishing error (observed)"),
     "RDL020": _rule("Parameters!X references a defined ReportParameter", "error", "logic"),
     "RDL021": _rule("Fields!X references a Field of the in-scope dataset", "warning", "logic, scope-dependent"),
     "RDL022": _rule("ReportParameter is referenced by some expression", "info", "logic"),
+    "RDL023": _rule("Caller parameter set matches the declared ReportParameters (opt-in, --expect-params)", "error", "URL access logic (observed)"),
     "RDL030": _rule("Size values are <number><unit> and at most 160in", "error", "RDL overview (Size type)"),
     "RDL031": _rule("Section width plus margins fits the page width", "warning", "layout logic (derived)"),
     "RDL040": _rule("ConnectString embeds credentials (value never shown)", "warning", "security smell"),
@@ -65,6 +67,7 @@ RULES: dict[str, dict[str, str]] = {
     "RDL060": _rule(".rds has RptDataSource with Name, Extension and ConnectString", "error", "ReportingServicesTools Write-RsCatalogItem.ps1"),
     "RDL061": _rule(".rsds has DataSourceDefinition with Extension and ConnectString", "error", "ReportingServicesTools Write-RsCatalogItem.ps1"),
     "RDL062": _rule("Shared data source/dataset reference resolves to a file in the scanned root", "warning", "deploy logic (derived)"),
+    "RDL070": _rule("Static TablixMembers kept with a dynamic member share one RepeatOnNewPage value", "error", "Report Builder publishing error (observed)"),
 }
 
 ITEM_TAGS = {"Textbox", "Tablix", "Rectangle", "Image", "Line", "Subreport", "Chart",
@@ -151,7 +154,8 @@ def _credential_finding(el: ET.Element, location: str) -> Finding | None:
                    f"ConnectString contains credential key(s): {', '.join(keys)} (value not shown)")
 
 
-def validate_rdl_bytes(data: bytes, *, project_stems: set[str] | None = None) -> tuple[dict, list[Finding]]:
+def validate_rdl_bytes(data: bytes, *, project_stems: set[str] | None = None,
+                       expect_params: list[str] | None = None) -> tuple[dict, list[Finding]]:
     meta: dict[str, Any] = {"namespace": None, "rdl_version": None}
     root, err = _parse(data)
     if err or root is None:
@@ -198,6 +202,10 @@ def validate_rdl_bytes(data: bytes, *, project_stems: set[str] | None = None) ->
     _check_datasets_sources(by_tag, sources, add)
     params = {p.get("Name", "").lower(): p for p in by_tag.get("ReportParameter", [])}
     _check_expressions(root, elems, by_tag, parents, params, add)
+    _check_parameter_layout(root, version, by_tag, add)
+    if expect_params is not None:
+        _check_caller_params(root, by_tag, expect_params, add)
+    _check_repeat_on_new_page(by_tag, add)
     _check_sizes(root, version, by_tag, parents, add)
     for e in by_tag.get("ConnectString", []):
         add_f(_credential_finding(e, loc(e)))
@@ -343,6 +351,99 @@ def _scope_dataset(el, parents, datasets):
     return next(iter(datasets.values())) if len(datasets) == 1 else None
 
 
+def _int(el: ET.Element | None) -> int | None:
+    text = _text(el)
+    return int(text) if text.isascii() and text.isdigit() else None  # isdigit alone accepts non-ASCII digits int() rejects
+
+
+def _check_parameter_layout(root, version, by_tag, add: Adder) -> None:
+    """RDL015. Report Builder: "The number of defined parameters is not equal to the number of cell
+    definitions in the parameter panel" - raised also when the layout is absent (0 cells)."""
+    params = by_tag.get("ReportParameter", [])
+    layout = _kid(root, "ReportParametersLayout")
+    if version != "2016/01" or (not params and layout is None):
+        return
+    grid = _kid(layout, "GridLayoutDefinition") if layout is not None else None
+    if grid is None:
+        add("RDL015", "error", root if layout is None else layout,
+            f"{len(params)} ReportParameter(s) but no ReportParametersLayout/GridLayoutDefinition")
+        return
+    cells = by_tag.get("CellDefinition", [])
+    if len(cells) != len(params):
+        add("RDL015", "error", grid, f"{len(params)} ReportParameter(s) but {len(cells)} CellDefinition(s)")
+    limits = {}
+    for tag in ("NumberOfColumns", "NumberOfRows"):
+        limits[tag] = _int(_kid(grid, tag))
+        if limits[tag] is None:
+            add("RDL015", "error", grid, f"GridLayoutDefinition/{tag} is missing or not a non-negative integer")
+    declared = {p.get("Name", "").lower() for p in params}
+    seen_names: set[str] = set()
+    seen_slots: set[tuple[int, int]] = set()
+    for cell in cells:
+        name = _text(_kid(cell, "ParameterName"))
+        if name.lower() not in declared:
+            add("RDL015", "error", cell, f"CellDefinition names '{name}', which is not a ReportParameter")
+        elif name.lower() in seen_names:
+            add("RDL015", "error", cell, f"ReportParameter '{name}' has more than one CellDefinition")
+        seen_names.add(name.lower())
+        slot = []
+        for tag, limit in (("ColumnIndex", limits["NumberOfColumns"]), ("RowIndex", limits["NumberOfRows"])):
+            el = _kid(cell, tag)
+            index = 0 if el is None else _int(el)  # an omitted index is read as 0
+            if index is None:
+                add("RDL015", "error", cell, f"Cell '{name}': {tag} '{_text(el)}' is not a non-negative integer")
+            elif limit is not None and index >= limit:
+                add("RDL015", "error", cell, f"Cell '{name}': {tag} {index} is outside the grid (size {limit})")
+            slot.append(index)
+        if None not in slot:
+            if tuple(slot) in seen_slots:
+                add("RDL015", "error", cell, f"Cell '{name}' shares column {slot[0]}, row {slot[1]} with another cell")
+            seen_slots.add(tuple(slot))
+    for p in params:
+        if p.get("Name", "").lower() not in seen_names:
+            add("RDL015", "error", p, f"ReportParameter '{p.get('Name')}' has no CellDefinition in the parameter panel")
+
+
+def _check_caller_params(root, by_tag, expected: list[str], add: Adder) -> None:
+    """RDL023. Names are compared exactly: URL-access report parameter names are case-sensitive."""
+    params = by_tag.get("ReportParameter", [])
+    declared = {p.get("Name", "") for p in params}
+    for name in dict.fromkeys(expected):
+        if name not in declared:
+            add("RDL023", "error", root, f"Caller sends parameter '{name}', which the report does not declare")
+    for p in params:
+        if p.get("Name", "") not in expected and _kid(p, "DefaultValue") is None:
+            add("RDL023", "warning", p,
+                f"ReportParameter '{p.get('Name')}' has no DefaultValue and is not in the caller's parameter list")
+
+
+def _check_repeat_on_new_page(by_tag, add: Adder) -> None:
+    """RDL070. Report Builder: TablixMembers kept with a dynamic member "must have the same value set
+    for the RepeatOnNewPage property as those following or preceding the dynamic TablixMember"."""
+    def repeats(member: ET.Element) -> bool:
+        return _text(_kid(member, "RepeatOnNewPage")).lower() == "true"  # absent means false
+
+    for holder in by_tag.get("TablixMembers", []):
+        members = _kids(holder, "TablixMember")
+        for i, member in enumerate(members):
+            group = _kid(member, "Group")
+            if group is None:
+                continue
+            # Static siblings bound to this group: KeepWithGroup=After just before it, =Before just after it.
+            for keep, indexes in (("After", range(i - 1, -1, -1)), ("Before", range(i + 1, len(members)))):
+                expected = None
+                for j in indexes:
+                    other = members[j]
+                    if _kid(other, "Group") is not None or _text(_kid(other, "KeepWithGroup")) != keep:
+                        break
+                    if expected is None:
+                        expected = repeats(other)  # the member next to the group sets the expected value
+                    elif repeats(other) != expected:
+                        add("RDL070", "error", other,
+                            f"TablixMember {j + 1} (KeepWithGroup={keep}) has RepeatOnNewPage {repeats(other)} but the "
+                            f"members kept with group '{group.get('Name', '')}' have {expected}")
+
+
 def _check_sizes(root, version, by_tag, parents, add: Adder) -> None:
     for tag in SIZE_TAGS:
         for e in by_tag.get(tag, []):
@@ -450,7 +551,8 @@ def _result(path: str, kind: str, meta: dict, findings: list[Finding]) -> dict:
             "findings": [f.to_dict() for f in findings]}
 
 
-def validate_file(path: Path, *, project_stems: set[str] | None = None) -> dict:
+def validate_file(path: Path, *, project_stems: set[str] | None = None,
+                  expect_params: list[str] | None = None) -> dict:
     suffix = path.suffix.lower()
     kind = suffix.lstrip(".") if suffix in (".rds", ".rsds") else "rdl"
     shown = path.as_posix()
@@ -465,7 +567,7 @@ def validate_file(path: Path, *, project_stems: set[str] | None = None) -> dict:
     except OSError as exc:
         return {**skipped, "skipped": "unreadable", "detail": type(exc).__name__}
     if kind == "rdl":
-        meta, findings = validate_rdl_bytes(data, project_stems=project_stems)
+        meta, findings = validate_rdl_bytes(data, project_stems=project_stems, expect_params=expect_params)
     else:
         meta, findings = {}, validate_companion_bytes(data, suffix)
     return _result(shown, kind, meta, findings)
@@ -530,8 +632,8 @@ def validate_root(root: Path, max_files: int = MAX_FILES) -> dict:
     return _document(files, warnings, unreadable)
 
 
-def validate_single(path: Path) -> dict:
-    result = validate_file(path)
+def validate_single(path: Path, expect_params: list[str] | None = None) -> dict:
+    result = validate_file(path, expect_params=expect_params)
     reason = result.pop("skipped", None)
     result.pop("detail", None)
     if reason:
@@ -568,6 +670,8 @@ def run(argv: list[str] | None = None) -> int:
     mode.add_argument("--rules", action="store_true", help="Print the rule catalog as JSON")
     parser.add_argument("--json", action="store_true", help="Print the full JSON document")
     parser.add_argument("--max-files", type=int, default=MAX_FILES)
+    parser.add_argument("--expect-params", metavar="A,B,...",
+                        help="With --file: comma-separated parameter names the caller sends (rule RDL023)")
     args = parser.parse_args(argv)
     try:
         if args.rules:
@@ -576,10 +680,14 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if args.max_files < 1 or args.max_files > MAX_FILES:
             raise ValueError("max-files outside safe range")
+        if args.expect_params is not None and args.file is None:
+            raise ValueError("--expect-params requires --file")
         if args.file is not None:
             if not args.file.is_file() and not args.file.is_symlink():
                 raise FileNotFoundError(args.file.as_posix())
-            doc = validate_single(args.file)
+            expected = None if args.expect_params is None else [
+                n.strip() for n in args.expect_params.split(",") if n.strip()]
+            doc = validate_single(args.file, expected)
         else:
             doc = validate_root(args.root, args.max_files)
         if args.json:

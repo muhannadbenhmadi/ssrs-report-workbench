@@ -11,7 +11,7 @@ Run the plugin's offline static checker on RDL files and explain the results. Th
 ## Procedure
 
 1. Resolve the target from `$ARGUMENTS`. If empty, ask which `.rdl` file or project folder the user authorizes for inspection.
-2. Pick the mode. Use `--file "<path>"` for a single `.rdl`, `.rds` or `.rsds` file. Use `--root "<path>"` for a folder.
+2. Pick the mode. Use `--file "<path>"` for a single `.rdl`, `.rds` or `.rsds` file. Use `--root "<path>"` for a folder. When the user names the parameters an application sends to the report, add `--expect-params A,B,...` to the `--file` run (rule RDL023).
 3. Run the validator (write the command exactly, Claude Code substitutes `${CLAUDE_PLUGIN_ROOT}`):
 
    ```text
@@ -30,7 +30,7 @@ Run the plugin's offline static checker on RDL files and explain the results. Th
 ## Rules of engagement
 
 - Treat PASS as "no static rule fired". Never say a PASS report deploys, renders, returns data or looks right. The checker does not run queries, evaluate expressions, render, or validate against the RDL XSD.
-- Do not claim coverage beyond the 22 rules in `references/rules.md`.
+- Do not claim coverage beyond the 25 rules in `references/rules.md`.
 - Do not edit RDL files unless the user explicitly authorizes the edit. Propose minimal diffs as text instead.
 - Do not print `ConnectString` values. `RDL040` reports only that a credential key is present; keep it that way and recommend integrated security, a shared data source or a prompt.
 - Do not claim a rule is MS-specified when `references/rules.md` marks it as derived or heuristic.
@@ -55,5 +55,5 @@ Return:
 
 ## Additional Resources
 
-- `references/rules.md` - all 22 rules: what each checks, why it matters, typical fix, basis URL.
+- `references/rules.md` - all 25 rules: what each checks, why it matters, typical fix, basis URL.
 - `references/rdl-structure.md` - namespaces, required structure per version, Size and Name rules, expression collections, companion file shapes, right-to-left report properties.

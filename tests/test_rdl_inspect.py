@@ -266,10 +266,18 @@ class InspectorTests(unittest.TestCase):
         self.assertIsNone(inspector.list_parameters(self.path)["data"]["parameters"][0]["data_type"])
         self.assertEqual(inspector.list_columns(self.path, tablix_id=1)["data"]["columns"], [])
 
+    def test_list_columns_defaults_to_the_only_tablix(self):
+        self.write(report())
+        code, result = self.cli("list_columns", "--file", str(self.path))
+        self.assertEqual((code, result["status"], result["data"]["tablix_id"]), (0, "OK", 1))
+        self.assertEqual(result, self.cli("list_columns", "--file", str(self.path), "--tablix-id", "1")[1])
+        code, result = self.cli("list_columns", "--file", str(FIXTURE))  # three Tablix: the caller must choose
+        self.assertEqual((code, result["error"]), (1, "unknown-tablix"))
+
     def test_cli_invalid_limits_and_missing_tablix_are_redacted_json(self):
         self.write(report())
         for operation, extras in (("list_tablix", ["--limit", "101"]), ("list_tablix", ["--offset", "-1"]),
-                                  ("list_datasets", ["--field-limit", "-1"]), ("list_columns", []),
+                                  ("list_datasets", ["--field-limit", "-1"]),
                                   ("list_columns", ["--tablix-id", "20"]),
                                   ("list_tablix", ["--tablix-id", "1"]),
                                   ("describe_report", ["--limit", "2"]),

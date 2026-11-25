@@ -24,7 +24,7 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/rdl_inspect.py" list_tablix --file "<path>
 python "${CLAUDE_PLUGIN_ROOT}/scripts/rdl_inspect.py" list_columns --file "<path>" --tablix-id 1
 ```
 
-Select `--tablix-id` from `list_tablix`; do not assume the first region is the report's only table. IDs are one-based document order and only stable while the file is unchanged. Nested regions have their own IDs and `parent_tablix_id`.
+`--tablix-id` may be omitted only when the report has exactly one Tablix; otherwise select it from `list_tablix`; do not assume the first region is the report's only table. IDs are one-based document order and only stable while the file is unchanged. Nested regions have their own IDs and `parent_tablix_id`.
 
 For list pages, use `--limit 1..100` and `--offset` from `page.next_offset`. Dataset fields are capped at 50 per dataset (`--field-limit 0` gives counts only). Do not promise all fields when `fields_truncated` is true; this wave has no field pagination. Do not automatically dump every page when a smaller answer suffices.
 

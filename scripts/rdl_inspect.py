@@ -353,9 +353,11 @@ def _cell_summary(report, contents):
             "field_references": references, "references_truncated": truncated}
 
 
-def list_columns(path, *, tablix_id, offset=0, limit=50):
+def list_columns(path, *, tablix_id=None, offset=0, limit=50):
     _limits(offset, limit)
     report = _Report(path)
+    if tablix_id is None and len(report.tablix) == 1:
+        tablix_id = 1  # the only Tablix needs no selector; with several the caller must choose
     if type(tablix_id) is not int or not 1 <= tablix_id <= len(report.tablix):
         raise InspectionError("unknown-tablix")
     tablix = report.tablix[tablix_id - 1]
