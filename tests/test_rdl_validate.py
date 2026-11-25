@@ -663,7 +663,15 @@ class RdlValidateTests(unittest.TestCase):
         self.assertEqual(joined["status"], "PASS")  # a warning never fails a file
         self.assertEqual([(f["rule"], f["severity"]) for f in joined["findings"]], [("RDL055", "warning")])
         self.assertIn("Textbox[@Name='Subtitle']", joined["findings"][0]["location"])
-        self.assertEqual(validate_file(RULE_FIXTURES / "mixed_direction_marked_2016.rdl")["findings"], [])
+        for stem in ("marked", "two_runs"):  # a mark, or a split into runs of one Paragraph, is still a warning
+            r = validate_file(RULE_FIXTURES / f"mixed_direction_{stem}_2016.rdl")
+            self.assertEqual([(f["rule"], f["severity"]) for f in r["findings"]], [("RDL055", "warning")], stem)
+        marked = validate_file(RULE_FIXTURES / "mixed_direction_marked_2016.rdl")["findings"][0]["message"]
+        self.assertIn("marked - renderer-dependent", marked)
+        two_runs = validate_file(RULE_FIXTURES / "mixed_direction_two_runs_2016.rdl")["findings"][0]["message"]
+        self.assertIn("separate TextRuns of one Paragraph", two_runs)
+        own_box = validate_file(RULE_FIXTURES / "mixed_direction_own_box_2016.rdl")  # value in its own Textbox, LTR
+        self.assertEqual((own_box["status"], own_box["findings"]), ("PASS", []))
 
         def hits(value, params=""):
             body = f"<ReportParameters>{params}</ReportParameters>" + section(textbox("T", value))
@@ -683,8 +691,45 @@ class RdlValidateTests(unittest.TestCase):
         self.assertEqual(hits('=IIf(Fields!A.Value, "\u0646\u0639\u0645", "\u0644\u0627")'), [])  # not concatenated
         self.assertEqual(hits(f'="Key: "{amp}{key}', param("Key")), [])                    # no right-to-left text
         for mark in ("ChrW(8234)", "ChrW(8206)", "chrw( &amp;H202A )", "ChrW(8296)", "\u200e"):
-            self.assertEqual(hits(f"={label}{amp}{mark}{amp}{key}", param("Key")), [], mark)
+            self.assertEqual(hits(f"={label}{amp}{mark}{amp}{key}", param("Key")), ["warning"], mark)
+            self.assertEqual(hits(f"={label}{amp}{mark}{amp}Globals!ExecutionTime"), ["warning"], mark)
+        self.assertEqual(hits("رقم ‪HR‬"), ["warning"])        # marked literal
+        self.assertEqual(hits("تقرير (30)‏"), [])         # a mark with no Latin
         self.assertEqual(hits(f"={label}{amp}ChrW(8212){amp}{key}", param("Key")), ["warning"])  # a dash is no mark
+
+        def para_hits(*values):
+            runs = "".join(f"<TextRun><Value>{v}</Value></TextRun>" for v in values)
+            body = (f"<ReportParameters>{param('Key')}</ReportParameters>" + section(
+                f'<Textbox Name="T"><Paragraphs><Paragraph><TextRuns>{runs}</TextRuns></Paragraph></Paragraphs></Textbox>'))
+            return [f.severity for f in check(body) if f.rule == "RDL055"]
+
+        rtl = "رقم: "
+        self.assertEqual(para_hits(rtl, f"={key}"), ["warning"])
+        self.assertEqual(para_hits(rtl, "HR-1"), ["warning"])
+        self.assertEqual(para_hits(rtl, "=Fields!A.Value"), ["info"])
+        self.assertEqual(para_hits(rtl, "=Globals!PageNumber"), [])
+        self.assertEqual(para_hits("Key: ", f"={key}"), [])  # no right-to-left run
+        self.assertEqual(para_hits(f"={key}"), [])
+
+    def test_rdl056_band_diacritics(self):
+        r = validate_file(RULE_FIXTURES / "footer_diacritic_2016.rdl")
+        self.assertEqual(r["status"], "PASS")
+        self.assertEqual([(f["rule"], f["severity"]) for f in r["findings"]], [("RDL056", "info")])
+        self.assertIn("PageFooter", r["findings"][0]["location"])
+        self.assertEqual(validate_file(RULE_FIXTURES / "footer_plain_2016.rdl")["findings"], [])
+
+        def hits(value, band="PageHeader"):
+            page = (f"<Page><{band}><Height>0.4in</Height><ReportItems>{textbox('H', value)}</ReportItems></{band}>"
+                    "<PageHeight>11in</PageHeight><PageWidth>8.5in</PageWidth></Page>")
+            return rules_of(check(section(page=page))).count("RDL056")
+
+        damma = "طُبع"
+        self.assertEqual(hits(damma), 1)
+        self.assertEqual(hits(f'="{damma} " &amp; Globals!ExecutionTime', "PageFooter"), 1)
+        self.assertEqual(hits("مٰل"), 1)                 # superscript alef U+0670
+        self.assertEqual(hits("=Fields!A.Value"), 0)                    # only literals are read
+        self.assertEqual(hits("طبع ـ"), 0)           # tatweel is not a combining mark
+        self.assertEqual(rules_of(check(section(textbox("B", damma)))).count("RDL056"), 0)  # body text is not judged
 
     def test_cli_expect_params(self):
         path = "tests/fixtures/rules/panel_fixed_2016.rdl"

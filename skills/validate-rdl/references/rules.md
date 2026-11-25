@@ -8,7 +8,7 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Names, references and parameter panel: RDL010, RDL011, RDL012, RDL013, RDL014, RDL015
 - Expressions and caller parameters: RDL020, RDL021, RDL022, RDL023
 - Layout, security and Tablix members: RDL030, RDL031, RDL040, RDL070
-- Right-to-left and mixed direction: RDL050, RDL051, RDL052, RDL053, RDL054, RDL055 - in [rules-rtl.md](rules-rtl.md)
+- Right-to-left and mixed direction: RDL050, RDL051, RDL052, RDL053, RDL054, RDL055, RDL056 - in [rules-rtl.md](rules-rtl.md)
 - Companion files: RDL060, RDL061, RDL062
 - Link references (end of file)
 

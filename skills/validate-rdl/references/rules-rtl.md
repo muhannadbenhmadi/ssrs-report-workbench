@@ -37,12 +37,20 @@ Part of the rule reference; the other rules are in [rules.md](rules.md). Same co
 - Typical fix: Set `Style/Direction` RTL on text runs and `LayoutDirection` RTL on tables. See `rdl-structure.md`, section "Right-to-left reports".
 - Basis: Heuristic (derived; not an MS-RDL rule).
 
-### RDL055 — TextRun joins right-to-left text with text that may be left-to-right
+### RDL055 — Right-to-left label and a value that may be left-to-right share one TextRun or Paragraph
 - Severity: warning when the file itself shows the mix or makes it likely; info when it is only possible
-- What it checks: Warning: a literal `Value` with right-to-left and Latin letters in one `TextRun`; or an expression where a right-to-left string literal is concatenated (`&`, `+`) and the expression reads a `ReportParameter` of type String or `User!`. Info: the same join when the expression reads only `Fields!`. Not flagged: a literal that is not concatenated (`IIf(x, "نعم", "لا")`), joins with `Globals!` or non-String parameters only, and any run holding a direction mark, typed or as `ChrW(8206)`, `ChrW(8207)`, `ChrW(8234)`..`ChrW(8238)`, `ChrW(8294)`..`ChrW(8297)` (decimal or `&H`). The mark's placement is not checked. Run-time values are never read.
-- Why it matters: A `TextRun` has one base direction. The Unicode bidirectional algorithm reorders the other-direction part and the neutral characters beside it (spaces, dashes, brackets), so a key, a code, an account name or a group of numbers can appear moved or in a different visual order.
-- Typical fix: Give the value its own `Textbox` or `TextRun` with `Direction` LTR, or wrap it in the expression, for example `ChrW(8234) & value & ChrW(8236)`. Then preview the report: this plugin does not render, and the wrap is not verified per renderer.
+- What it checks: Warning: a literal `Value` with right-to-left and Latin letters in one `TextRun`; an expression where a right-to-left string literal is concatenated (`&`, `+`) and the expression reads a `ReportParameter` of type String or `User!`; any such run that holds a direction mark, typed or as `ChrW(8206)`, `ChrW(8207)`, `ChrW(8234)`..`ChrW(8238)`, `ChrW(8294)`..`ChrW(8297)` (decimal or `&H`), reported with the message "marked - renderer-dependent"; and a right-to-left `TextRun` next to a value `TextRun` (String parameter, `User!` or Latin text) in one `Paragraph`. Info: the same joins when the value reads only `Fields!`. Clean: the label and the value are in different `Textbox`es. Not flagged: a literal that is not concatenated (`IIf(x, "نعم", "لا")`), joins with `Globals!` or non-String parameters only (unless marked), and a mark in text with no Latin letters. Run-time values are never read.
+- Why it matters: A `TextRun` has one base direction. The Unicode bidirectional algorithm reorders the other-direction part and the neutral characters beside it (spaces, dashes, brackets), so a key, a code, an account name or a group of numbers can appear moved or in a different visual order. A mark keeps the value in one piece but does not decide which side of the label it lands on. Renderers also order the runs of one paragraph differently (not verified).
+- Changed: a direction mark no longer clears the finding. In one consumer project, marks around the values cleared RDL055, yet the value still moved in a local preview and in a PDF exported by the report server. A separate value box fixed it.
+- Typical fix: Put the value in its own `Textbox` with `TextRun` `Direction` LTR next to the label box; verify on a PDF exported by the report server, not only in Report Builder preview. Marks (`ChrW(8234) & value & ChrW(8236)`) are a last resort and unverified per renderer. This plugin does not render.
 - Basis: [Unicode UAX #9][uax9]; heuristic (derived; not an MS-RDL rule).
+
+### RDL056 — Page header/footer literal holds an Arabic combining mark
+- Severity: info
+- What it checks: A literal, or a string literal inside an expression, in a `TextRun` under `PageHeader` or `PageFooter` that holds an Arabic combining mark (U+064B..U+065F, U+0670: tashkil such as damma, fatha, shadda, sukun, superscript alef). Body text and field values are not checked.
+- Why it matters: It may render split on some report-server PDF renderers (observed: «طُبع» exported as «ط بع»).
+- Typical fix: Prefer the undiacritised word («طبع»); verify on a PDF exported by the report server.
+- Basis: Report-server PDF rendering (observed in one consumer project); heuristic.
 
 ## Link references
 
