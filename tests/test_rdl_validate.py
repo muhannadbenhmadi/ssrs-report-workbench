@@ -672,6 +672,11 @@ class RdlValidateTests(unittest.TestCase):
         self.assertIn("separate TextRuns of one Paragraph", two_runs)
         own_box = validate_file(RULE_FIXTURES / "mixed_direction_own_box_2016.rdl")  # value in its own Textbox, LTR
         self.assertEqual((own_box["status"], own_box["findings"]), ("PASS", []))
+        # Label boxes of the own-box fix: label + RLM, IIf(condition on a parameter, label + RLM, ""), and a
+        # subtitle that joins only Fields! (info). The values sit in their own LTR boxes.
+        labels = validate_file(RULE_FIXTURES / "mixed_direction_labels_2016.rdl")
+        self.assertEqual([(f["rule"], f["severity"]) for f in labels["findings"]], [("RDL055", "info")])
+        self.assertIn("Textbox[@Name='SubtitleLabel']", labels["findings"][0]["location"])
 
         def hits(value, params=""):
             body = f"<ReportParameters>{params}</ReportParameters>" + section(textbox("T", value))
@@ -692,7 +697,14 @@ class RdlValidateTests(unittest.TestCase):
         self.assertEqual(hits(f'="Key: "{amp}{key}', param("Key")), [])                    # no right-to-left text
         for mark in ("ChrW(8234)", "ChrW(8206)", "chrw( &amp;H202A )", "ChrW(8296)", "\u200e"):
             self.assertEqual(hits(f"={label}{amp}{mark}{amp}{key}", param("Key")), ["warning"], mark)
-            self.assertEqual(hits(f"={label}{amp}{mark}{amp}Globals!ExecutionTime"), ["warning"], mark)
+            self.assertEqual(hits(f"={label}{amp}{mark}"), [], mark)  # a mark beside a label is not a value
+            self.assertEqual(hits(f"={label}{amp}{mark}{amp}Fields!A.Value"), ["info"], mark)  # Fields! stays info
+        # A String parameter read only in an IIf condition is not joined to the output; one in a branch is.
+        self.assertEqual(hits(f'=IIf(Len({key}) &gt; 0, {label}{amp}ChrW(8207), "")', param("Key")), [])
+        self.assertEqual(hits(f'=IIf(IIf({key} = "", 1, 2) &gt; 0, {label}{amp}ChrW(8207), "")', param("Key")), [])
+        self.assertEqual(hits(f'=IIf(Len({key}) &gt; 0, {label}{amp}{key}, "")', param("Key")), ["warning"])
+        self.assertEqual(hits(f'=IIf(Len({key}) &gt; 0, "", {label}{amp}ChrW(8234){amp}{key})', param("Key")),
+                         ["warning"])
         self.assertEqual(hits("رقم ‪HR‬"), ["warning"])        # marked literal
         self.assertEqual(hits("تقرير (30)‏"), [])         # a mark with no Latin
         self.assertEqual(hits(f"={label}{amp}ChrW(8212){amp}{key}", param("Key")), ["warning"])  # a dash is no mark

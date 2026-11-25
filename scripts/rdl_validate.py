@@ -95,6 +95,7 @@ LATIN_RE = re.compile(r"[A-Za-z]")
 BIDI_MARK_RE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]"
                           r"|ChrW\(\s*(?:820[67]|823[4-8]|829[4-7]|&H(?:200[EF]|202[A-E]|206[6-9]))\s*\)", re.I)
 HARAKAT_RE = re.compile(r"[ً-ٰٟ]")  # Arabic combining marks (tashkil), incl. superscript alef
+IIF_RE = re.compile(r"\bIIf\s*\(", re.I)
 USER_RE = re.compile(r"\bUser!", re.I)
 SIZE_RE = re.compile(r"^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(cm|mm|in|pt|pc)\s*$")
 
@@ -524,9 +525,25 @@ MARKED_MSG = ("Right-to-left text and a value share one TextRun with a direction
               "the mark keeps the value in one piece but does not decide which side of the label it lands on")
 
 
+def _drop_iif_conditions(bare: str) -> str:
+    """IIf(cond, a, b) returns a or b: what cond reads is not joined to the output. Needs string literals stripped."""
+    out, i = [], 0
+    for m in IIF_RE.finditer(bare):
+        if m.start() < i:
+            continue  # an IIf inside a condition already dropped
+        depth, j = 0, m.end()
+        while j < len(bare) and not (depth == 0 and bare[j] in ",)"):
+            depth += {"(": 1, ")": -1}.get(bare[j], 0)
+            j += 1
+        out.append(bare[i:m.end()])
+        i = j
+    return "".join(out) + bare[i:]
+
+
 def _ltr_reads(expression: str, params) -> tuple[str | None, list[str]]:
-    """What an expression reads that may be left-to-right: warning for String parameters and User!, info for Fields!."""
-    bare = strip_vb_strings(expression)
+    """What an expression returns that may be left-to-right: warning for String parameters and User!, info for
+    Fields!. A direction mark (ChrW) is never a value."""
+    bare = _drop_iif_conditions(strip_vb_strings(expression))
     likely = [f"Parameters!{n}" for n in dict.fromkeys(PARAM_RE.findall(bare))
               if n.lower() in params and _text(_kid(params[n.lower()], "DataType")) == "String"]
     likely += ["User!"] if USER_RE.search(bare) else []
@@ -556,11 +573,10 @@ def _check_mixed_direction(by_tag, params, add: Adder) -> None:
                                                       or raw[:m.start()].rstrip()[-1:] in ("&", "+"))
                    for m in VB_STRING_RE.finditer(raw)):
             continue
-        if marked:  # a mark is itself the author's sign that an other-direction value is joined here
+        severity, names = _ltr_reads(raw, params)  # a label with only a mark beside it returns no value
+        if severity == "warning" and marked:
             add("RDL055", "warning", value, MARKED_MSG)
-            continue
-        severity, names = _ltr_reads(raw, params)
-        if severity == "warning":
+        elif severity == "warning":
             add("RDL055", "warning", value, f"Right-to-left text is joined to {', '.join(names)} (text that may be "
                 "left-to-right: a key, a code, an account name) in one TextRun")
         elif severity:
