@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = ROOT / "skills" / "validate-rdl"
 SKILL = SKILL_DIR / "SKILL.md"
 RULES_MD = SKILL_DIR / "references" / "rules.md"
+RULES_RTL_MD = SKILL_DIR / "references" / "rules-rtl.md"
 STRUCTURE_MD = SKILL_DIR / "references" / "rdl-structure.md"
 AGENT = ROOT / "agents" / "rdl-reviewer.md"
 
@@ -41,15 +42,16 @@ class SkillDocsTests(unittest.TestCase):
         self.assertIn("tools:", head)
 
     def test_references_exist(self) -> None:
-        for path in (RULES_MD, STRUCTURE_MD):
+        for path in (RULES_MD, RULES_RTL_MD, STRUCTURE_MD):
             self.assertTrue(path.is_file(), path)
         body = read(SKILL)
         self.assertIn("references/rules.md", body)
         self.assertIn("references/rdl-structure.md", body)
+        self.assertIn("references/rules-rtl.md", body)
 
     def test_length_limits(self) -> None:
         self.assertLess(len(read(SKILL).splitlines()), 120)
-        for path in (RULES_MD, STRUCTURE_MD):
+        for path in (RULES_MD, RULES_RTL_MD, STRUCTURE_MD):
             self.assertLess(len(read(path).splitlines()), 200, path)
 
 

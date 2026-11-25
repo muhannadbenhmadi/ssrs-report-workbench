@@ -65,6 +65,7 @@ Expressions (`=...`) are never evaluated. Rules that need a literal value skip e
 | RDL052 | error | `Style/NumeralVariant` is an integer 1..7 or expression | MS-RDL `Style.NumeralVariant` |
 | RDL053 | error | `Tablix/LayoutDirection` ∈ {LTR, RTL} | 2016/01 XSD |
 | RDL054 | info | `Report/Language` starts with `ar`, `he`, `fa` or `ur` but no `Direction` = RTL and no `LayoutDirection` = RTL anywhere (RTL readiness) | heuristic (derived) |
+| RDL055 | warning / info | One `TextRun` joins right-to-left text with text that may be left-to-right and holds no direction mark: literal Arabic + Latin letters, or an Arabic string literal concatenated in an expression that reads a String parameter or `User!` (warning) or only `Fields!` (info) | Unicode UAX #9; heuristic (derived) |
 | RDL060 | error | `.rds`: root `RptDataSource` with `Name`, `ConnectionProperties/Extension`, `ConnectionProperties/ConnectString` | ReportingServicesTools `Write-RsCatalogItem.ps1` |
 | RDL061 | error | `.rsds`: root `DataSourceDefinition` with `Extension` and `ConnectString` | same |
 | RDL062 | warning | `DataSourceReference` / `SharedDataSetReference` resolves to a `.rds`/`.rsds`/`.rsd` file stem in the scanned root (only with `--root`, and only when the root contains at least one such file) | deploy logic (derived) |

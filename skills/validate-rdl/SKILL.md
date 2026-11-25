@@ -23,14 +23,14 @@ Run the plugin's offline static checker on RDL files and explain the results. Th
    - Exit code 0 means PASS, 1 means FAIL or a fatal error (details on stderr as JSON), 2 means INCOMPLETE (no errors, but some candidate files were skipped or none were found).
 4. Parse the JSON. Read `status`, `coverage_complete`, `summary`, each `files[].findings[]` and the top-level `warnings[]` (oversize, symlink, `no-candidates`).
 5. Group findings by file, then by severity: `error`, `warning`, `info`.
-6. For each distinct rule id, read `references/rules.md` for the meaning, the basis URL and the usual fix. Quote the finding's `location` and `message` as evidence.
+6. For each distinct rule id, read `references/rules.md` (`references/rules-rtl.md` for RDL050-RDL055) for the meaning, the basis URL and the usual fix. Quote the finding's `location` and `message` as evidence.
 7. Open the flagged element in the RDL only when the message is not enough to explain the problem.
 8. Report using the format below.
 
 ## Rules of engagement
 
 - Treat PASS as "no static rule fired". Never say a PASS report deploys, renders, returns data or looks right. The checker does not run queries, evaluate expressions, render, or validate against the RDL XSD.
-- Do not claim coverage beyond the 25 rules in `references/rules.md`.
+- Do not claim coverage beyond the 26 rules in `references/rules.md` and `references/rules-rtl.md`.
 - Do not edit RDL files unless the user explicitly authorizes the edit. Propose minimal diffs as text instead.
 - Do not print `ConnectString` values. `RDL040` reports only that a credential key is present; keep it that way and recommend integrated security, a shared data source or a prompt.
 - Do not claim a rule is MS-specified when `references/rules.md` marks it as derived or heuristic.
@@ -55,5 +55,6 @@ Return:
 
 ## Additional Resources
 
-- `references/rules.md` - all 25 rules: what each checks, why it matters, typical fix, basis URL.
+- `references/rules.md` - 20 of the 26 rules: what each checks, why it matters, typical fix, basis URL.
+- `references/rules-rtl.md` - the six right-to-left and mixed-direction rules (RDL050-RDL055), same layout.
 - `references/rdl-structure.md` - namespaces, required structure per version, Size and Name rules, expression collections, companion file shapes, right-to-left report properties.

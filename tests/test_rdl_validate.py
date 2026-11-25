@@ -658,6 +658,34 @@ class RdlValidateTests(unittest.TestCase):
                         + section(textbox("T", "=Parameters!A.Value")))
         self.assertEqual(check(with_default, expect_params=[]), [])
 
+    def test_rdl055_mixed_direction(self):
+        joined = validate_file(RULE_FIXTURES / "mixed_direction_joined_2016.rdl")
+        self.assertEqual(joined["status"], "PASS")  # a warning never fails a file
+        self.assertEqual([(f["rule"], f["severity"]) for f in joined["findings"]], [("RDL055", "warning")])
+        self.assertIn("Textbox[@Name='Subtitle']", joined["findings"][0]["location"])
+        self.assertEqual(validate_file(RULE_FIXTURES / "mixed_direction_marked_2016.rdl")["findings"], [])
+
+        def hits(value, params=""):
+            body = f"<ReportParameters>{params}</ReportParameters>" + section(textbox("T", value))
+            return [f.severity for f in check(body) if f.rule == "RDL055"]
+
+        label, key, amp = '"\u0631\u0642\u0645: "', "Parameters!Key.Value", " &amp; "
+        self.assertEqual(hits("\u062a\u0642\u0631\u064a\u0631 HR"), ["warning"])        # literal mix
+        self.assertEqual(hits("\u0627\u0644\u0625\u0630\u0646 (30) - 2"), [])           # digits and brackets only
+        self.assertEqual(hits("Report (30)"), [])
+        self.assertEqual(hits(f"={label}{amp}{key}", param("Key")), ["warning"])
+        self.assertEqual(hits(f"={key} + {label}", param("Key")), ["warning"])
+        self.assertEqual(hits(f"={label}{amp}{key}", param("Key", "Integer")), [])
+        self.assertEqual(hits(f"={label}{amp}User!UserID"), ["warning"])
+        self.assertEqual(hits(f"={label}{amp}Fields!A.Value"), ["info"])
+        self.assertEqual(hits(f'={label} + Format(Fields!D.Value, "yyyy/MM/dd")'), ["info"])
+        self.assertEqual(hits(f"={label}{amp}CStr(Globals!PageNumber)"), [])
+        self.assertEqual(hits('=IIf(Fields!A.Value, "\u0646\u0639\u0645", "\u0644\u0627")'), [])  # not concatenated
+        self.assertEqual(hits(f'="Key: "{amp}{key}', param("Key")), [])                    # no right-to-left text
+        for mark in ("ChrW(8234)", "ChrW(8206)", "chrw( &amp;H202A )", "ChrW(8296)", "\u200e"):
+            self.assertEqual(hits(f"={label}{amp}{mark}{amp}{key}", param("Key")), [], mark)
+        self.assertEqual(hits(f"={label}{amp}ChrW(8212){amp}{key}", param("Key")), ["warning"])  # a dash is no mark
+
     def test_cli_expect_params(self):
         path = "tests/fixtures/rules/panel_fixed_2016.rdl"
         ok = self._cli("--file", path, "--json", "--expect-params", "UserId, FromDate,ToDate,BranchId,IsMain")

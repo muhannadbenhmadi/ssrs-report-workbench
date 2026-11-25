@@ -8,7 +8,7 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Names, references and parameter panel: RDL010, RDL011, RDL012, RDL013, RDL014, RDL015
 - Expressions and caller parameters: RDL020, RDL021, RDL022, RDL023
 - Layout, security and Tablix members: RDL030, RDL031, RDL040, RDL070
-- Right-to-left: RDL050, RDL051, RDL052, RDL053, RDL054
+- Right-to-left and mixed direction: RDL050, RDL051, RDL052, RDL053, RDL054, RDL055 - in [rules-rtl.md](rules-rtl.md)
 - Companion files: RDL060, RDL061, RDL062
 - Link references (end of file)
 
@@ -125,41 +125,6 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - What it checks: In each `TablixMembers` list, the unbroken run of static members with `KeepWithGroup=After` just before a dynamic member (one with `Group`), and the run with `KeepWithGroup=Before` just after it, must each hold one `RepeatOnNewPage` value. Absent means `false`. The member next to the group sets the expected value. Hidden members count.
 - Why and fix: Report Builder refuses the Tablix ("... must have the same value set for the RepeatOnNewPage property as those following or preceding the dynamic TablixMember"). Set the same value on every member of the run. Basis: observed Report Builder error; the run definition is derived, not taken from a Microsoft specification.
 
-### RDL050 — Style/Direction is Default, LTR, RTL or an expression
-- Severity: error
-- What it checks: Literal `Style/Direction` must be `Default`, `LTR` or `RTL`. Values starting with `=` are skipped.
-- Why it matters: The XSD type is a plain string, so a typo such as `Rtl` passes the schema but is not a valid value.
-- Typical fix: Use the exact spelling `RTL` or `LTR`.
-- Basis: [MS-RDL Style.Direction][dir].
-
-### RDL051 — Style/Direction is set where it is ignored
-- Severity: info
-- What it checks: `Direction` has no effect unless the grandparent of `Style` is `TextRun`, `Subreport`, `Chart`, `LinearGauge` or `RadialGauge`.
-- Why it matters: Setting it on a `Textbox`, `Tablix` or `Paragraph` style looks right in the file but does nothing.
-- Typical fix: Move `Direction` into the `TextRun` style (or the chart, gauge or subreport style).
-- Basis: [MS-RDL Style.Direction][dir].
-
-### RDL052 — Style/NumeralVariant is an integer 1..7 or an expression
-- Severity: error
-- What it checks: Literal `NumeralVariant` must be an integer from 1 to 7. Meaning: 1 default, 2 Western digits, 3 native digits for ar, bn, bo, fa, gu, hi, kn, kok, lo, mr, ms, or, pa, sa, ta, te, th, ur; 4 to 6 for ko, ja, zh; 7 for ko. The static check covers the range only, not the culture match.
-- Why it matters: An out-of-range value is invalid, and a variant that does not suit the culture is silently ignored.
-- Typical fix: Use 3 for native digits in Arabic, Persian and Urdu reports.
-- Basis: [MS-RDL Style.NumeralVariant][nv].
-
-### RDL053 — Tablix/LayoutDirection is LTR or RTL
-- Severity: error
-- What it checks: Literal `Tablix/LayoutDirection` must be `LTR` or `RTL`.
-- Why it matters: RTL reverses column order and moves row headers right. It does not change Excel sheet direction.
-- Typical fix: Use `LTR` or `RTL`.
-- Basis: [2016/01 XSD][xsd]; [LayoutDirection (Tablix)][ld]; Excel caveat from [Microsoft Q&A][xl].
-
-### RDL054 — RTL-language report declares no RTL direction
-- Severity: info
-- What it checks: When `Report/Language` starts with `ar`, `he`, `fa` or `ur`, flags a report with no `Direction` of RTL and no `LayoutDirection` of RTL anywhere.
-- Why it matters: Readiness hint only. The report may be intentionally left-to-right, or may set direction through expressions.
-- Typical fix: Set `Style/Direction` RTL on text runs and `LayoutDirection` RTL on tables. See `rdl-structure.md`, section "Right-to-left reports".
-- Basis: Heuristic (derived; not an MS-RDL rule).
-
 ### RDL060 — .rds has RptDataSource with Name, Extension and ConnectString
 - Severity: error
 - What it checks: Root must be `RptDataSource` with `Name`, `ConnectionProperties/Extension` and `ConnectionProperties/ConnectString`.
@@ -190,10 +155,6 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 [ov]: https://learn.microsoft.com/en-us/sql/reporting-services/reports/report-definition-language-ssrs
 [gl]: https://learn.microsoft.com/en-us/openspecs/sql_server_protocols/ms-rdl/b2482b3f-74ab-4ca8-a9e5-c07955011743
 [cp]: https://learn.microsoft.com/en-us/openspecs/sql_server_protocols/ms-rdl/66ba68b2-3d03-443a-bcc1-4cf0f53012a5
-[dir]: https://learn.microsoft.com/en-us/openspecs/sql_server_protocols/MS-RDL/4c0efe27-0fb0-43ca-a3c1-d37cd7fb4c72
-[nv]: https://learn.microsoft.com/en-us/openspecs/sql_server_protocols/ms-rdl/e1b67670-1195-48a5-afd8-033107befe20
-[ld]: https://learn.microsoft.com/en-us/previous-versions/sql/sql-server-2008/ms155126(v=sql.100)
-[xl]: https://learn.microsoft.com/en-us/answers/questions/1091489/ssrs-export-to-excel-ignores-default-sheet-directi
 [rsc]: https://raw.githubusercontent.com/microsoft/ReportingServicesTools/master/ReportingServicesTools/Functions/CatalogItems/Write-RsCatalogItem.ps1
 [dsd]: https://learn.microsoft.com/en-us/dotnet/api/reportservice2010.datasourcedefinition.connectstring
 [inv]: https://raw.githubusercontent.com/microsoft/Reporting-Services/master/PaginatedReportSamples/Invoice.rdl
