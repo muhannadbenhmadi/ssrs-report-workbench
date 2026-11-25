@@ -51,12 +51,15 @@ Expressions (`=...`) are never evaluated. Rules that need a literal value skip e
 | RDL012 | error | `DataSet` has `Query/CommandText` (non-empty) unless it has `SharedDataSet` | 2016/01 XSD |
 | RDL013 | error | `DataSource` does not have both `ConnectionProperties` and `DataSourceReference` | MS-RDL `DataSource.ConnectionProperties` |
 | RDL014 | error | `ReportParameter/DataType` ∈ {Boolean, DateTime, Integer, Float, String} | 2016/01 XSD |
+| RDL015 | error | 2016/01: `ReportParametersLayout/GridLayoutDefinition` holds exactly one `CellDefinition` per `ReportParameter` (count, names, no duplicate, indexes inside the grid, no shared slot); required when any parameter exists | Report Builder publishing error (observed) |
 | RDL020 | error | Every `Parameters!X` in any expression names a `ReportParameter` | logic |
 | RDL021 | warning | Every `Fields!X` in an expression names a `Field` of the in-scope dataset (nearest ancestor with a `DataSetName` child; else the only dataset) or of any dataset named by a string literal in the same expression (aggregate/lookup scope such as `First(Fields!X.Value, "Other")`); skipped when no dataset can be determined | logic, scope-dependent |
 | RDL022 | info | `ReportParameter` never referenced by any expression (`Parameters!X`) nor by `@X` in any `CommandText` | logic |
+| RDL023 | error / warning | Opt-in (`--file` + `--expect-params A,B,...`): a listed name the report does not declare → error; a declared parameter with no `DefaultValue` that is not listed → warning. Exact, case-sensitive names | URL access logic (observed) |
 | RDL030 | error | Size values (`Width`, `Height`, `Top`, `Left`, `PageWidth`, `PageHeight`, margins) are `<number><unit>` with unit ∈ {cm, mm, in, pt, pc} and ≤ 160 in | RDL overview (`Size` type) |
 | RDL031 | warning | `ReportSection/Width` + `LeftMargin` + `RightMargin` ≤ `PageWidth` when all are literal | layout logic (derived) |
 | RDL040 | warning | `ConnectString` contains `Password=`, `Pwd=`, `User ID=` or `Uid=` (value never echoed) | security smell |
+| RDL070 | error | Static `TablixMember`s kept with a dynamic member (`KeepWithGroup=After` run before it, `=Before` run after it) share one `RepeatOnNewPage` value; absent = false | Report Builder publishing error (observed; run definition derived) |
 | RDL050 | error | `Style/Direction` ∈ {Default, LTR, RTL} or expression | MS-RDL `Style.Direction` |
 | RDL051 | info | `Direction` set where the spec says it is ignored (grandparent not `TextRun`, `Subreport`, `Chart`, `LinearGauge`, `RadialGauge`) | MS-RDL `Style.Direction` |
 | RDL052 | error | `Style/NumeralVariant` is an integer 1..7 or expression | MS-RDL `Style.NumeralVariant` |

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <ReportParameters>
+    <ReportParameter Name="UserId">
+      <DataType>Integer</DataType>
+      <Prompt>UserId</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="FromDate">
+      <DataType>DateTime</DataType>
+      <Prompt>FromDate</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="ToDate">
+      <DataType>DateTime</DataType>
+      <Prompt>ToDate</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="BranchId">
+      <DataType>Integer</DataType>
+      <Prompt>BranchId</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="IsMain">
+      <DataType>Boolean</DataType>
+      <Prompt>IsMain</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportSections>
+    <ReportSection>
+      <Width>6.5in</Width>
+      <Body>
+        <Height>2in</Height>
+        <ReportItems>
+          <Textbox Name="Filters">
+            <Paragraphs><Paragraph><TextRuns><TextRun><Value>="" &amp; Parameters!UserId.Value &amp; Parameters!FromDate.Value &amp; Parameters!ToDate.Value &amp; Parameters!BranchId.Value &amp; Parameters!IsMain.Value</Value></TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+        </ReportItems>
+      </Body>
+      <Page>
+        <PageHeight>11in</PageHeight>
+        <PageWidth>8.5in</PageWidth>
+        <LeftMargin>1in</LeftMargin>
+        <RightMargin>1in</RightMargin>
+      </Page>
+    </ReportSection>
+  </ReportSections>
+</Report>

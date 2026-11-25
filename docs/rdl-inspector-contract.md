@@ -18,7 +18,7 @@ All five Python functions in `scripts.rdl_inspect` accept a local file path and 
 | `list_datasets` | IDs/names, field counts, bounded field names/data fields and calculated flags, embedded/shared/absent query kind, command type enum and data source identifier | `offset=0`, `limit=50`, `field_limit=20` |
 | `list_parameters` | IDs/names, type enum, nullable/multi-value/hidden flags, presence of defaults and valid values | `offset=0`, `limit=50` |
 | `list_tablix` | IDs/names, parent Tablix ID, explicit dataset identifier, direct body column/row counts and LTR/RTL enum | `offset=0`, `limit=50` |
-| `list_columns` | selected Tablix ID, binding coverage, body columns with one-based index, literal size width and bounded cell summaries | required `tablix_id`, `offset=0`, `limit=50` |
+| `list_columns` | selected Tablix ID, binding coverage, body columns with one-based index, literal size width and bounded cell summaries | `tablix_id` (required unless the report has exactly one Tablix), `offset=0`, `limit=50` |
 
 CLI options use hyphens (`--field-limit`, `--tablix-id`). IDs are document order and distinct even for duplicate/missing names. They are stable only for an unchanged file; offsets likewise assume an unchanged input. No filename or source hash is returned. Dataset references are explicit declarations only; nested inherited or aggregate scope is not inferred. Shared dataset/data source paths are not followed. Missing optional properties become `null`, empty collections or presence flags; this is not schema validation.
 

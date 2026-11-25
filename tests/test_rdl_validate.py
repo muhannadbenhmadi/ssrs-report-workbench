@@ -14,6 +14,7 @@ from scripts.rdl_validate import (
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures" / "rdl"
+RULE_FIXTURES = REPO / "tests" / "fixtures" / "rules"  # one broken and one fixed report per rule
 NS = {
     "2008/01": "http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition",
     "2010/01": "http://schemas.microsoft.com/sqlserver/reporting/2010/01/reportdefinition",
@@ -55,6 +56,25 @@ def dataset(name: str, fields=("A",), source: str = "S1", command: str = "SELECT
 
 def param(name: str, dtype: str = "String") -> str:
     return f'<ReportParameter Name="{name}"><DataType>{dtype}</DataType></ReportParameter>'
+
+
+def panel(cells, cols=4, rows=1) -> str:
+    defs = "".join(f"<CellDefinition><ColumnIndex>{c}</ColumnIndex><RowIndex>{r}</RowIndex>"
+                   f"<ParameterName>{n}</ParameterName></CellDefinition>" for n, c, r in cells)
+    return (f"<ReportParametersLayout><GridLayoutDefinition><NumberOfColumns>{cols}</NumberOfColumns>"
+            f"<NumberOfRows>{rows}</NumberOfRows><CellDefinitions>{defs}</CellDefinitions>"
+            f"</GridLayoutDefinition></ReportParametersLayout>")
+
+
+def member(keep: str = "", repeat: str = "", group: str = "", inner: str = "") -> str:
+    return ("<TablixMember>" + (f'<Group Name="{group}" />' if group else "")
+            + (f"<KeepWithGroup>{keep}</KeepWithGroup>" if keep else "")
+            + (f"<RepeatOnNewPage>{repeat}</RepeatOnNewPage>" if repeat else "")
+            + (f"<TablixMembers>{inner}</TablixMembers>" if inner else "") + "</TablixMember>")
+
+
+def tablix_rows(members: str) -> str:
+    return f'<Tablix Name="X"><TablixRowHierarchy><TablixMembers>{members}</TablixMembers></TablixRowHierarchy></Tablix>'
 
 
 def rules_of(findings):
@@ -570,6 +590,84 @@ class RdlValidateTests(unittest.TestCase):
         self.assertGreaterEqual(len(RULES), 20)
         for rule in RULES.values():
             self.assertEqual(set(rule), {"title", "severity", "basis"})
+
+    # ---- parameter panel (RDL015), RepeatOnNewPage parity (RDL070), caller parameters (RDL023) ----
+    def test_rule_fixtures_broken_fail_and_fixed_pass(self):
+        for stem, rule in (("panel", "RDL015"), ("repeat_parity", "RDL070")):
+            broken = validate_file(RULE_FIXTURES / f"{stem}_{'missing' if stem == 'panel' else 'broken'}_2016.rdl")
+            self.assertEqual(broken["status"], "FAIL")
+            self.assertEqual({f["rule"] for f in broken["findings"]}, {rule})
+            fixed = validate_file(RULE_FIXTURES / f"{stem}_fixed_2016.rdl")
+            self.assertEqual((fixed["status"], fixed["findings"]), ("PASS", []))
+
+    def test_rdl015_grid_rules(self):
+        def messages(cells, cols=4, rows=1, names=("A", "B"), version="2016/01"):
+            body = (f"<ReportParameters>{''.join(param(n) for n in names)}</ReportParameters>" + panel(cells, cols, rows)
+                    + section(textbox("T", "=" + " &amp; ".join(f"Parameters!{n}.Value" for n in names))))
+            return [f.message for f in check(body, version) if f.rule == "RDL015"]
+
+        self.assertEqual(messages([("A", 0, 0), ("B", 1, 0)]), [])
+        self.assertEqual(messages([("a", 0, 0), ("B", 1, 0)]), [])  # names are matched without case
+        self.assertIn("2 ReportParameter(s) but 1 CellDefinition(s)", messages([("A", 0, 0)])[0])
+        self.assertIn("'B' has no CellDefinition", messages([("A", 0, 0)])[1])
+        self.assertIn("'Z', which is not a ReportParameter", messages([("A", 0, 0), ("Z", 1, 0)])[0])
+        self.assertIn("more than one CellDefinition", messages([("A", 0, 0), ("A", 1, 0)])[0])
+        self.assertIn("ColumnIndex 4 is outside the grid", messages([("A", 0, 0), ("B", 4, 0)])[0])
+        self.assertIn("RowIndex 1 is outside the grid", messages([("A", 0, 0), ("B", 0, 1)])[0])
+        self.assertIn("shares column 0, row 0", messages([("A", 0, 0), ("B", 0, 0)])[0])
+        self.assertIn("ColumnIndex 'x' is not", messages([("A", 0, 0), ("B", "x", 0)])[0])
+        self.assertIn("NumberOfRows is missing", messages([("A", 0, 0), ("B", 1, 0)], rows="")[0])
+        # A layout that lists a parameter the report no longer declares.
+        self.assertTrue(messages([("A", 0, 0)], names=()))
+        # ReportParametersLayout exists only in the 2016/01 schema.
+        body = f"<ReportParameters>{param('A')}</ReportParameters>" + section(textbox("T", "=Parameters!A.Value"))
+        self.assertNotIn("RDL015", rules_of(check(body, "2010/01")))
+        self.assertIn("RDL015", rules_of(check(body, "2016/01")))
+        self.assertNotIn("RDL015", rules_of(check(section())))  # no parameters, no layout
+
+    def test_rdl070_repeat_on_new_page_parity(self):
+        def count(*members):
+            return rules_of(check(section(tablix_rows("".join(members))))).count("RDL070")
+
+        group, t, f, none = member(group="G"), member("After", "true"), member("After", "false"), member("After")
+        self.assertEqual(count(t, t, group), 0)
+        self.assertEqual(count(none, none, f, group), 0)  # an absent RepeatOnNewPage is false
+        self.assertEqual(count(t, none, t, group), 1)     # expected value comes from the member next to the group
+        self.assertEqual(count(none, t, t, group), 1)
+        self.assertEqual(count(none, member(), t, group), 0)  # KeepWithGroup=None ends the run
+        self.assertEqual(count(group, member("Before", "true"), member("Before")), 1)
+        self.assertEqual(count(t, group, member("Before")), 0)  # header and footer runs are judged separately
+        self.assertEqual(count(t, none), 0)  # no dynamic member, nothing to keep with
+        nested = member(group="Outer", inner=t + none + group)
+        self.assertEqual(count(t, nested), 1)
+
+    def test_rdl023_caller_parameters(self):
+        fixed = RULE_FIXTURES / "panel_fixed_2016.rdl"
+        declared = ["UserId", "FromDate", "ToDate", "BranchId", "IsMain"]
+        self.assertEqual(validate_file(fixed, expect_params=declared)["findings"], [])
+        self.assertEqual(validate_file(fixed)["findings"], [])  # the rule is opt-in
+        r = validate_file(fixed, expect_params=declared + ["PrintedBy", "userid"])
+        self.assertEqual(r["status"], "FAIL")
+        self.assertEqual([(f["rule"], f["severity"]) for f in r["findings"]], [("RDL023", "error")] * 2)
+        r = validate_file(fixed, expect_params=declared[:4])
+        self.assertEqual(r["status"], "PASS")
+        self.assertEqual([(f["rule"], f["severity"]) for f in r["findings"]], [("RDL023", "warning")])
+        self.assertIn("'IsMain'", r["findings"][0]["message"])
+        with_default = (f"<ReportParameters>{param('A')[:-18]}<DefaultValue><Values><Value>1</Value></Values>"
+                        f"</DefaultValue></ReportParameter></ReportParameters>" + panel([("A", 0, 0)])
+                        + section(textbox("T", "=Parameters!A.Value")))
+        self.assertEqual(check(with_default, expect_params=[]), [])
+
+    def test_cli_expect_params(self):
+        path = "tests/fixtures/rules/panel_fixed_2016.rdl"
+        ok = self._cli("--file", path, "--json", "--expect-params", "UserId, FromDate,ToDate,BranchId,IsMain")
+        self.assertEqual((ok.returncode, json.loads(ok.stdout)["status"]), (0, "PASS"))
+        bad = self._cli("--file", path, "--json", "--expect-params", "UserId,FromDate,ToDate,BranchId,IsMain,PrintedAt")
+        self.assertEqual(bad.returncode, 1)
+        self.assertEqual([f["rule"] for f in json.loads(bad.stdout)["files"][0]["findings"]], ["RDL023"])
+        root = self._cli("--root", "tests/fixtures/rules", "--expect-params", "UserId")
+        self.assertEqual(root.returncode, 1)
+        self.assertEqual(json.loads(root.stderr)["error"], "ValueError")
 
     # ---- CLI ----
     def _cli(self, *args):

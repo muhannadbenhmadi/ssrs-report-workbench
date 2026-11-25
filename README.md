@@ -48,6 +48,7 @@ The discovery command classifies **extensions only**. It does not prove SSRS com
 ```sh
 python scripts/rdl_validate.py --file reports/Invoice.rdl --json
 python scripts/rdl_validate.py --root path/to/project --json
+python scripts/rdl_validate.py --file reports/Invoice.rdl --expect-params Year,PrintedBy   # opt-in caller contract (RDL023)
 python scripts/rdl_validate.py --rules
 ```
 
@@ -64,7 +65,7 @@ python scripts/rdl_inspect.py describe_report --file reports/Invoice.rdl
 python scripts/rdl_inspect.py list_datasets --file reports/Invoice.rdl --field-limit 20
 python scripts/rdl_inspect.py list_parameters --file reports/Invoice.rdl
 python scripts/rdl_inspect.py list_tablix --file reports/Invoice.rdl
-python scripts/rdl_inspect.py list_columns --file reports/Invoice.rdl --tablix-id 1
+python scripts/rdl_inspect.py list_columns --file reports/Invoice.rdl --tablix-id 1   # id optional when the report has one Tablix
 ```
 
 Skill: `/ssrs-report-workbench:inspect-rdl <path>`. Enumerates all Tablix, including nested regions and multiple report sections, with bounded metadata JSON. Modern 2008/2010/2016 RDL is supported; legacy 2003/2005 layout is explicitly incomplete. Columns are XML body columns with sampled static field references; complex grids omit guessed bindings. No ConnectStrings, SQL, parameter values, cell text or expression strings are returned. Names can still be confidential.

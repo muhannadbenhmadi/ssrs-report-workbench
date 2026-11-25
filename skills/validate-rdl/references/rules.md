@@ -5,9 +5,9 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 ## Contents
 
 - Structure: RDL001, RDL002, RDL003
-- Names and references: RDL010, RDL011, RDL012, RDL013, RDL014
-- Expressions: RDL020, RDL021, RDL022
-- Layout and security: RDL030, RDL031, RDL040
+- Names, references and parameter panel: RDL010, RDL011, RDL012, RDL013, RDL014, RDL015
+- Expressions and caller parameters: RDL020, RDL021, RDL022, RDL023
+- Layout, security and Tablix members: RDL030, RDL031, RDL040, RDL070
 - Right-to-left: RDL050, RDL051, RDL052, RDL053, RDL054
 - Companion files: RDL060, RDL061, RDL062
 - Link references (end of file)
@@ -68,6 +68,11 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Typical fix: Use one of the five valid types.
 - Basis: [2016/01 XSD][xsd]; [RDL overview][ov].
 
+### RDL015 — 2016/01 ReportParametersLayout grid holds exactly one cell per ReportParameter
+- Severity: error
+- What it checks: 2016/01 only. With any `ReportParameter`, `ReportParametersLayout/GridLayoutDefinition` must exist; `CellDefinition` count equals the parameter count; each `ParameterName` is a declared parameter (case-insensitive) and appears once; `ColumnIndex` < `NumberOfColumns`, `RowIndex` < `NumberOfRows` (an omitted index reads as 0); no two cells share a slot. Hidden parameters need a cell too.
+- Why and fix: Report Builder refuses the preview ("The number of defined parameters is not equal to the number of cell definitions in the parameter panel"), also when the layout is absent. Add or correct the grid, one cell per parameter. Basis: observed Report Builder error; the slot and bounds checks are derived.
+
 ### RDL020 — Parameters!X references a defined ReportParameter
 - Severity: error
 - What it checks: Every `Parameters!Name` in an expression must name a `ReportParameter` (case-insensitive).
@@ -89,6 +94,11 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Typical fix: Wire it into a query or filter, or delete it. Ignore when it is intentionally unused.
 - Basis: Cross-reference logic (derived).
 
+### RDL023 — Caller parameter set matches the declared ReportParameters (opt-in)
+- Severity: error for a sent name the report does not declare; warning for a declared parameter with no `DefaultValue` that the caller does not send
+- What it checks: Only with `--file <rdl> --expect-params A,B,...` (the names an application puts in its URL-access request). Names are compared exactly, case included. Without the option the rule never runs.
+- Why and fix: The report server rejects a request that carries an undeclared parameter, and prompts or fails for a missing value with no default. Declare the parameter (and give it a panel cell, RDL015), or change the caller. Basis: URL access behaviour (observed).
+
 ### RDL030 — Size values are <number><unit> and at most 160in
 - Severity: error
 - What it checks: Literal `Width`, `Height`, `Top`, `Left`, `PageWidth`, `PageHeight`, margins and interactive sizes must be a number plus cm, mm, in, pt or pc, and not exceed 160 in. Expressions are skipped.
@@ -109,6 +119,11 @@ Catalog source of truth: `python scripts/rdl_validate.py --rules`. Severity `err
 - Why it matters: Credentials stored in the RDL travel with source control and every export.
 - Typical fix: Use integrated security, a shared data source with credentials stored on the server, or a prompt. Rotate any password already committed.
 - Basis: Security smell (heuristic). The sample [Invoice.rdl][inv] keeps `ConnectString` and `IntegratedSecurity` in `ConnectionProperties`.
+
+### RDL070 — Static TablixMembers kept with a dynamic member share one RepeatOnNewPage value
+- Severity: error
+- What it checks: In each `TablixMembers` list, the unbroken run of static members with `KeepWithGroup=After` just before a dynamic member (one with `Group`), and the run with `KeepWithGroup=Before` just after it, must each hold one `RepeatOnNewPage` value. Absent means `false`. The member next to the group sets the expected value. Hidden members count.
+- Why and fix: Report Builder refuses the Tablix ("... must have the same value set for the RepeatOnNewPage property as those following or preceding the dynamic TablixMember"). Set the same value on every member of the run. Basis: observed Report Builder error; the run definition is derived, not taken from a Microsoft specification.
 
 ### RDL050 — Style/Direction is Default, LTR, RTL or an expression
 - Severity: error
