@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <Language>ar</Language>
+  <ReportParameters>
+    <ReportParameter Name="JobKey">
+      <DataType>String</DataType>
+      <Prompt>JobKey</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>1</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>JobKey</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <ReportSections>
+    <ReportSection>
+      <Width>6.5in</Width>
+      <Body>
+        <Height>2in</Height>
+        <ReportItems>
+          <Textbox Name="SubtitleLabel">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>رقم المهمة:</Value>
+              <Style><Direction>RTL</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="SubtitleValue">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>=Parameters!JobKey.Value</Value>
+              <Style><Direction>LTR</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+        </ReportItems>
+      </Body>
+      <Page>
+        <PageHeight>11in</PageHeight>
+        <PageWidth>8.5in</PageWidth>
+        <LeftMargin>1in</LeftMargin>
+        <RightMargin>1in</RightMargin>
+      </Page>
+    </ReportSection>
+  </ReportSections>
+</Report>

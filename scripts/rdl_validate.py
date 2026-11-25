@@ -64,7 +64,8 @@ RULES: dict[str, dict[str, str]] = {
     "RDL052": _rule("Style/NumeralVariant is an integer 1..7 or an expression", "error", _MSRDL + " Style.NumeralVariant"),
     "RDL053": _rule("Tablix/LayoutDirection is LTR or RTL", "error", "2016/01 XSD"),
     "RDL054": _rule("RTL-language report declares no RTL direction (readiness hint)", "info", "heuristic (derived)"),
-    "RDL055": _rule("TextRun joins right-to-left text with text that may be left-to-right, with no direction mark", "warning", "Unicode UAX #9; heuristic (derived)"),
+    "RDL055": _rule("Right-to-left label and a value that may be left-to-right share one TextRun or Paragraph", "warning", "Unicode UAX #9; heuristic (derived)"),
+    "RDL056": _rule("Page header/footer literal holds an Arabic combining mark", "info", "report-server PDF rendering (observed); heuristic"),
     "RDL060": _rule(".rds has RptDataSource with Name, Extension and ConnectString", "error", "ReportingServicesTools Write-RsCatalogItem.ps1"),
     "RDL061": _rule(".rsds has DataSourceDefinition with Extension and ConnectString", "error", "ReportingServicesTools Write-RsCatalogItem.ps1"),
     "RDL062": _rule("Shared data source/dataset reference resolves to a file in the scanned root", "warning", "deploy logic (derived)"),
@@ -93,6 +94,8 @@ LATIN_RE = re.compile(r"[A-Za-z]")
 # An explicit direction mark, typed or built with ChrW(8206) / ChrW(&H200E): LRM, RLM, embeddings, overrides, isolates.
 BIDI_MARK_RE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]"
                           r"|ChrW\(\s*(?:820[67]|823[4-8]|829[4-7]|&H(?:200[EF]|202[A-E]|206[6-9]))\s*\)", re.I)
+HARAKAT_RE = re.compile(r"[ً-ٰٟ]")  # Arabic combining marks (tashkil), incl. superscript alef
+IIF_RE = re.compile(r"\bIIf\s*\(", re.I)
 USER_RE = re.compile(r"\bUser!", re.I)
 SIZE_RE = re.compile(r"^\s*(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(cm|mm|in|pt|pc)\s*$")
 
@@ -218,6 +221,7 @@ def validate_rdl_bytes(data: bytes, *, project_stems: set[str] | None = None,
         add_f(_credential_finding(e, loc(e)))
     _check_rtl(root, by_tag, parents, add)
     _check_mixed_direction(by_tag, params, add)
+    _check_band_diacritics(by_tag, add)
     # Only meaningful when the scanned root actually holds shared files; otherwise the references
     # most likely point at items that live on the report server.
     if project_stems:
@@ -517,35 +521,95 @@ def _check_rtl(root, by_tag, parents, add: Adder) -> None:
             f"Language '{lang}' is right-to-left but no Direction or LayoutDirection is RTL")
 
 
+MARKED_MSG = ("Right-to-left text and a value share one TextRun with a direction mark (marked - renderer-dependent): "
+              "the mark keeps the value in one piece but does not decide which side of the label it lands on")
+
+
+def _drop_iif_conditions(bare: str) -> str:
+    """IIf(cond, a, b) returns a or b: what cond reads is not joined to the output. Needs string literals stripped."""
+    out, i = [], 0
+    for m in IIF_RE.finditer(bare):
+        if m.start() < i:
+            continue  # an IIf inside a condition already dropped
+        depth, j = 0, m.end()
+        while j < len(bare) and not (depth == 0 and bare[j] in ",)"):
+            depth += {"(": 1, ")": -1}.get(bare[j], 0)
+            j += 1
+        out.append(bare[i:m.end()])
+        i = j
+    return "".join(out) + bare[i:]
+
+
+def _ltr_reads(expression: str, params) -> tuple[str | None, list[str]]:
+    """What an expression returns that may be left-to-right: warning for String parameters and User!, info for
+    Fields!. A direction mark (ChrW) is never a value."""
+    bare = _drop_iif_conditions(strip_vb_strings(expression))
+    likely = [f"Parameters!{n}" for n in dict.fromkeys(PARAM_RE.findall(bare))
+              if n.lower() in params and _text(_kid(params[n.lower()], "DataType")) == "String"]
+    likely += ["User!"] if USER_RE.search(bare) else []
+    if likely:
+        return "warning", likely
+    fields = [f"Fields!{n}" for n in dict.fromkeys(FIELD_RE.findall(bare))]
+    return ("info", fields) if fields else (None, [])
+
+
 def _check_mixed_direction(by_tag, params, add: Adder) -> None:
     """RDL055. A TextRun has one base direction; other-direction text joined to it is reordered by the
-    Unicode bidirectional algorithm. Only what the file shows is judged, never run-time values."""
+    Unicode bidirectional algorithm. Clean only when the value sits in its own Textbox.
+    Only what the file shows is judged, never run-time values."""
     for run in by_tag.get("TextRun", []):
         value = _kid(run, "Value")
         raw = _text(value)
-        # shortcut: any direction mark counts as handled, its placement is not checked; upgrade if that proves too lax
-        if not RTL_CHAR_RE.search(raw) or BIDI_MARK_RE.search(raw):
+        if not RTL_CHAR_RE.search(raw):
             continue
+        marked = BIDI_MARK_RE.search(raw)
         if not raw.startswith("="):
             if LATIN_RE.search(raw):
-                add("RDL055", "warning", value, "Literal text mixes right-to-left and Latin letters in one TextRun")
+                add("RDL055", "warning", value,
+                    MARKED_MSG if marked else "Literal text mixes right-to-left and Latin letters in one TextRun")
             continue
         # A right-to-left string literal counts only when it is concatenated; IIf(x, "...", "...") is one direction.
         if not any(RTL_CHAR_RE.search(m.group()) and (raw[m.end():].lstrip()[:1] in ("&", "+")
                                                       or raw[:m.start()].rstrip()[-1:] in ("&", "+"))
                    for m in VB_STRING_RE.finditer(raw)):
             continue
-        bare = strip_vb_strings(raw)
-        likely = [f"Parameters!{n}" for n in dict.fromkeys(PARAM_RE.findall(bare))
-                  if n.lower() in params and _text(_kid(params[n.lower()], "DataType")) == "String"]
-        likely += ["User!"] if USER_RE.search(bare) else []
-        fields = [f"Fields!{n}" for n in dict.fromkeys(FIELD_RE.findall(bare))]
-        if likely:
-            add("RDL055", "warning", value, f"Right-to-left text is joined to {', '.join(likely)} (text that may be "
-                "left-to-right: a key, a code, an account name) with no direction mark")
-        elif fields:
-            add("RDL055", "info", value, f"Right-to-left text is joined to {', '.join(fields)}; "
+        severity, names = _ltr_reads(raw, params)  # a label with only a mark beside it returns no value
+        if severity == "warning" and marked:
+            add("RDL055", "warning", value, MARKED_MSG)
+        elif severity == "warning":
+            add("RDL055", "warning", value, f"Right-to-left text is joined to {', '.join(names)} (text that may be "
+                "left-to-right: a key, a code, an account name) in one TextRun")
+        elif severity:
+            add("RDL055", "info", value, f"Right-to-left text is joined to {', '.join(names)}; "
                 "check the order if a field can hold Latin text")
+    # Split into runs of one Paragraph: renderers order the runs of one paragraph differently (not verified).
+    for para in by_tag.get("Paragraph", []):
+        runs = _kid(para, "TextRuns")
+        values = [v for r in (_kids(runs, "TextRun") if runs is not None else []) if (v := _kid(r, "Value")) is not None]
+        if len(values) < 2 or not any(RTL_CHAR_RE.search(_text(v)) for v in values):
+            continue
+        for v in values:
+            raw = _text(v)
+            if RTL_CHAR_RE.search(raw):
+                continue
+            severity, names = (_ltr_reads(raw, params) if raw.startswith("=")
+                               else ("warning", ["Latin text"]) if LATIN_RE.search(raw) else (None, []))
+            if severity:
+                add("RDL055", severity, v, f"Right-to-left text and {', '.join(names)} are separate TextRuns of one "
+                    "Paragraph; renderers order the runs of one paragraph differently (not verified)")
+
+
+def _check_band_diacritics(by_tag, add: Adder) -> None:
+    """RDL056. Arabic combining marks in page header/footer literals (observed split on a report-server PDF)."""
+    bands = by_tag.get("PageHeader", []) + by_tag.get("PageFooter", [])
+    in_band = {e for b in bands for e in b.iter() if _ln(e) == "TextRun"}
+    for run in by_tag.get("TextRun", []):
+        value = _kid(run, "Value") if run in in_band else None
+        raw = _text(value)
+        literal = "".join(m.group() for m in VB_STRING_RE.finditer(raw)) if raw.startswith("=") else raw
+        if HARAKAT_RE.search(literal):
+            add("RDL056", "info", value, "Page header/footer literal holds an Arabic combining mark (U+064B..U+065F, "
+                "U+0670); it may render split on some report-server PDF renderers; prefer the undiacritised word")
 
 
 def validate_companion_bytes(data: bytes, suffix: str) -> list[Finding]:

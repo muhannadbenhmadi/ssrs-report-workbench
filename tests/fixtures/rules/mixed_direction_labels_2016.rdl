@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition">
+  <Language>ar</Language>
+  <ReportParameters>
+    <ReportParameter Name="JobKey">
+      <DataType>String</DataType>
+      <Prompt>JobKey</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="PrintedBy">
+      <DataType>String</DataType>
+      <Prompt>PrintedBy</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>1</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>JobKey</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>PrintedBy</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <DataSources>
+    <DataSource Name="Main">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=localhost</ConnectString>
+      </ConnectionProperties>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="Header">
+      <Query>
+        <DataSourceName>Main</DataSourceName>
+        <CommandText>SELECT FromDate, ToDate</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="FromDate"><DataField>FromDate</DataField></Field>
+        <Field Name="ToDate"><DataField>ToDate</DataField></Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Width>6.5in</Width>
+      <Body>
+        <Height>2in</Height>
+        <ReportItems>
+          <Textbox Name="SubtitleLabel">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>="الفترة: " + Format(First(Fields!FromDate.Value, "Header"), "yyyy/MM/dd") + " - " + Format(First(Fields!ToDate.Value, "Header"), "yyyy/MM/dd") + "    |    رقم المهمة:" + ChrW(8207)</Value>
+              <Style><Direction>RTL</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="SubtitleValue">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>=Parameters!JobKey.Value</Value>
+              <Style><Direction>LTR</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="PrintedAtLabel">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>="طبع في:" &amp; ChrW(8207)</Value>
+              <Style><Direction>RTL</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="PrintedAtValue">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>=Format(Globals!ExecutionTime, "yyyy/MM/dd HH:mm")</Value>
+              <Style><Direction>LTR</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="PrintedByLabel">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>=IIf(Len(Parameters!PrintedBy.Value) &gt; 0, "طبع بواسطة:" &amp; ChrW(8207), "")</Value>
+              <Style><Direction>RTL</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+          <Textbox Name="PrintedByValue">
+            <Paragraphs><Paragraph><TextRuns><TextRun>
+              <Value>=Parameters!PrintedBy.Value</Value>
+              <Style><Direction>LTR</Direction></Style>
+            </TextRun></TextRuns></Paragraph></Paragraphs>
+          </Textbox>
+        </ReportItems>
+      </Body>
+      <Page>
+        <PageHeight>11in</PageHeight>
+        <PageWidth>8.5in</PageWidth>
+        <LeftMargin>1in</LeftMargin>
+        <RightMargin>1in</RightMargin>
+      </Page>
+    </ReportSection>
+  </ReportSections>
+</Report>

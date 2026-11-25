@@ -23,7 +23,7 @@ Run the plugin's offline static checker on RDL files and explain the results. Th
    - Exit code 0 means PASS, 1 means FAIL or a fatal error (details on stderr as JSON), 2 means INCOMPLETE (no errors, but some candidate files were skipped or none were found).
 4. Parse the JSON. Read `status`, `coverage_complete`, `summary`, each `files[].findings[]` and the top-level `warnings[]` (oversize, symlink, `no-candidates`).
 5. Group findings by file, then by severity: `error`, `warning`, `info`.
-6. For each distinct rule id, read `references/rules.md` (`references/rules-rtl.md` for RDL050-RDL055) for the meaning, the basis URL and the usual fix. Quote the finding's `location` and `message` as evidence.
+6. For each distinct rule id, read `references/rules.md` (`references/rules-rtl.md` for RDL050-RDL056) for the meaning, the basis URL and the usual fix. Quote the finding's `location` and `message` as evidence.
 7. Open the flagged element in the RDL only when the message is not enough to explain the problem.
 8. Report using the format below.
 
@@ -56,5 +56,5 @@ Return:
 ## Additional Resources
 
 - `references/rules.md` - 20 of the 26 rules: what each checks, why it matters, typical fix, basis URL.
-- `references/rules-rtl.md` - the six right-to-left and mixed-direction rules (RDL050-RDL055), same layout.
+- `references/rules-rtl.md` - the seven right-to-left and mixed-direction rules (RDL050-RDL056), same layout.
 - `references/rdl-structure.md` - namespaces, required structure per version, Size and Name rules, expression collections, companion file shapes, right-to-left report properties.
